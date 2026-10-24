@@ -43,17 +43,13 @@ def test_pivot_messages_are_translated() -> None:
     assert out[3] == {"role": "tool", "tool_call_id": "t1", "content": "[P12]"}
 
 
-@pytest.fixture(autouse=True)
-def _no_wait(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("aiffel.providers.openrouter.RETRY_DELAYS", (0.0, 0.0))
-
-
 def _provider(handler: Any) -> OpenRouterProvider:
     return OpenRouterProvider(
         SecretValue("sk-or-SECRET"),
         "mistralai/mistral-small-2603",
         effort="max",
         http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        retry_delays=(0.0, 0.0),
     )
 
 
