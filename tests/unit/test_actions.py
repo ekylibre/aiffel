@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -39,6 +40,18 @@ def test_payload_follows_procedo_slots_and_handlers() -> None:
     [period] = body["working_periods_attributes"]
     assert period["stopped_at"] == (START + timedelta(minutes=90)).isoformat()
     assert "provider" not in body  # ajouté à l'exécution seulement
+
+
+def test_working_period_is_sent_in_utc() -> None:
+    """Ekylibre (Procedo) perd le fuseau : 9 h à Paris doit partir en 07:00 UTC."""
+    paris = datetime(2026, 10, 24, 9, 0, tzinfo=ZoneInfo("Europe/Paris"))
+    [period] = to_payload(_draft(started_at=paris), PROCEDURES["spraying"])[
+        "working_periods_attributes"
+    ]
+    assert period == {
+        "started_at": "2026-10-24T07:00:00+00:00",
+        "stopped_at": "2026-10-24T08:30:00+00:00",
+    }
 
 
 def test_empty_collections_are_omitted() -> None:

@@ -14,7 +14,7 @@ Différence avec Duke : le ``quantity_handler`` est choisi parmi ceux que la pro
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 # Unités proposées au modèle → (indicateur Ekylibre recherché, nom d'unité Ekylibre, densité ?).
@@ -100,10 +100,12 @@ def to_payload(draft: Draft, procedure: dict[str, Any]) -> dict[str, Any]:
         "targets_attributes": [
             {"reference_name": target_slot["name"], "product_id": pid} for pid in draft.target_ids
         ],
+        # En UTC : Procedo réécrit l'heure sans son fuseau (``strftime('%Y-%m-%d %H:%M')``) et
+        # Ekylibre la relit en UTC ; 9 h à Paris (+02:00) devenait 11 h.
         "working_periods_attributes": [
             {
-                "started_at": draft.started_at.isoformat(),
-                "stopped_at": (draft.started_at + draft.duration).isoformat(),
+                "started_at": draft.started_at.astimezone(UTC).isoformat(),
+                "stopped_at": (draft.started_at + draft.duration).astimezone(UTC).isoformat(),
             }
         ],
     }
