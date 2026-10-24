@@ -112,12 +112,16 @@ async def test_follow_up_completes_an_incomplete_request() -> None:
         )
     relance = provider.calls[1]["messages"][-1]["content"]
     assert "Bel Air" in relance and "aujourd'hui" in relance
-    assert row.proposal == "après relance" and row.predicted_intent == "other"
+    # « Quelle parcelle ? » : l'agent a bien compris qu'il s'agit d'un enregistrement.
+    assert row.proposal == "après relance" and row.predicted_intent == "record"
     assert row.scores["date"] == "ok" and row.scores["procedure"] == "ko"
 
 
 def test_procedure_matching() -> None:
     assert procedure_matches("retiré", "net_removing", "Retrait de filet")
+    assert procedure_matches("broyage de sarments", "vine_shoot_grinding", "Broyage des sarments")
+    assert procedure_matches("Pollenisation", "pollination", "Pollinisation")  # faute du corpus
+    assert procedure_matches("moisson", "harvesting", "Récolte")
     assert procedure_matches("traité", "spraying", "Pulvérisation")
     assert procedure_matches("semé", "sowing", "Semis")
     assert not procedure_matches("labour", "spraying", "Pulvérisation")

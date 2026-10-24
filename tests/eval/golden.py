@@ -30,6 +30,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -70,7 +71,7 @@ SYNONYMS = {
     "desherb": ("pulveris", "desherb", "spraying", "weeding", "hoeing"),
     "epand": ("fertilis", "epand", "spreading", "fertiliz"),
     "recolt": ("recolt", "harvest", "moisson"),
-    "moissonn": ("recolt", "harvest"),
+    "moisson": ("recolt", "harvest"),
     "vendang": ("vendang", "harvest", "grape"),
     "fauch": ("fauch", "mowing"),
     "sem": ("semi", "sowing"),
@@ -285,22 +286,37 @@ def _number(span: str) -> float | None:
 
 
 def procedure_matches(span: str, name: str, label: str) -> bool:
-    haystack = norm(f"{name} {label}").replace("_", " ")
-    word = norm(span)
-    for stem, targets in SYNONYMS.items():
-        if word.startswith(stem):
-            return any(target in haystack for target in targets)
-    return word[: max(4, len(word) - 2)] in haystack
+    """Un mot significatif du verbe (racine, synonyme ou faute de frappe) dans la procédure."""
+    haystack = norm(f"{name} {label}").replace("_", " ").replace("/", " ")
+    hay_words = re.findall(r"[a-z']+", haystack)
+    for word in re.findall(r"[a-z]+", norm(span)):
+        if len(word) < 4:
+            continue
+        synonyms = [targets for stem, targets in SYNONYMS.items() if word.startswith(stem)]
+        if any(target in haystack for targets in synonyms for target in targets):
+            return True
+        if word[: max(4, len(word) - 2)] in haystack:
+            return True
+        if any(SequenceMatcher(None, word, h).ratio() >= 0.8 for h in hay_words if len(h) >= 4):
+            return True
+    return False
+
+
+# L'agent demande ce qui manque pour préparer une intervention.
+ASKS_FOR_INTERVENTION = re.compile(
+    r"type d'intervention|quel(le)? (parcelle|culture|procédure)|qu'avez-vous fait|"
+    r"pour (la |le )?pr[ée]parer|je (peux )?pr[ée]pare",
+    re.IGNORECASE,
+)
 
 
 def predicted_intent(calls: list[tuple[str, dict[str, Any], bool]], answer: str) -> str:
-    """Enregistrement : proposition, savoir-faire ou procédures consultés, préparation annoncée."""
+    """Enregistrement : proposition, savoir-faire d'enregistrement, ou éléments demandés."""
     names = [name for name, _a, _e in calls]
     if (
         PROPOSE in names
-        or "ekylibre_procedures" in names
         or any(n == "load_skill" and RECORD_SKILL in json.dumps(a) for n, a, _e in calls)
-        or re.search(r"\bpr[ée]par", answer, re.IGNORECASE)
+        or ASKS_FOR_INTERVENTION.search(answer.replace("\u2019", "'"))
     ):
         return "record"
     if any(name.startswith(("ekylibre_", "lexicon_")) for name in names):
@@ -336,6 +352,8 @@ class Row:
     usage: Usage = field(default_factory=Usage)
     cost_usd: float = 0.0
     answer: str = ""
+    # Données brutes pour re-noter sans relancer le modèle (``rescore``).
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 def cost(model: str, usage: Usage) -> float:
@@ -474,6 +492,25 @@ async def run_entry(
         usage=usage,
         cost_usd=round(cost(model, usage), 5),
         answer=answer,
+        raw={
+            "calls": gateway.calls,
+            "first_calls": len(first_turn),
+            "first_answer": first_answer,
+            "followed_up_date": followed_up_date,
+        },
+    )
+
+
+def rescore(entry: Entry, raw: dict[str, Any], farm: EvalEkylibre, today: date) -> Any:
+    calls = [tuple(c) for c in raw["calls"]]
+    return score(
+        entry,
+        calls,  # type: ignore[arg-type]
+        farm,
+        today,
+        first_turn=calls[: raw["first_calls"]],  # type: ignore[arg-type]
+        first_answer=raw["first_answer"],
+        followed_up_date=raw["followed_up_date"],
     )
 
 

@@ -77,6 +77,7 @@ def write_csv(rows: list[Row], path: Path, model: str, effort: str) -> None:
                 "cache_ecrit",
                 "cout_usd",
                 "reponse",
+                "brut",
             ]
         )
         for r in rows:
@@ -98,6 +99,7 @@ def write_csv(rows: list[Row], path: Path, model: str, effort: str) -> None:
                     r.usage.cache_write_tokens,
                     r.cost_usd,
                     r.answer.replace("\n", " ")[:500],
+                    json.dumps(r.raw, ensure_ascii=False, default=str),
                 ]
             )
 
