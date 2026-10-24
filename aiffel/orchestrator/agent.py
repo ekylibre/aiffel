@@ -45,6 +45,7 @@ TOO_LONG = (
     "(parcelle, campagne, produit) ?"
 )
 VOICE_LATER = "Les messages vocaux arrivent bientôt. En attendant, écrivez-moi votre demande."
+TRANSCRIBED_NOTE = "[Message vocal transcrit automatiquement : des mots peuvent être mal reconnus]"
 PHOTO_LATER = "Je ne sais pas encore analyser les photos. Décrivez-moi ce que vous voyez."
 
 
@@ -97,7 +98,8 @@ class Orchestrator:
         conversation_id, history = await self._history(
             farm.farm_id, caller.user_id, message.channel
         )
-        messages: list[dict[str, Any]] = [*history, {"role": "user", "content": text}]
+        content = f"{TRANSCRIBED_NOTE}\n{text}" if message.transcribed else text
+        messages: list[dict[str, Any]] = [*history, {"role": "user", "content": content}]
 
         try:
             answer, usage = await self._loop(ctx, messages, open_proposal)

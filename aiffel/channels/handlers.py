@@ -9,6 +9,7 @@ from aiffel.channels.dispatcher import UNSUPPORTED, WELCOME, Caller
 from aiffel.connectors.ekylibre.client import EkylibreError, EkylibreUnauthorized
 from aiffel.farm_context import FarmContextService, FarmRef
 from aiffel.pairing import PairingService
+from aiffel.voice import VoiceService
 
 HELP = (
     "Voici ce que je sais faire pour l'instant :\n"
@@ -43,6 +44,7 @@ class Handlers:
     public_base_url: str
     assistant: Assistant = placeholder_assistant
     actions: ActionService | None = None
+    voice: VoiceService | None = None
 
     async def invite(self, caller: Caller, intro: str) -> list[OutboundMessage]:
         code = await self.pairing.create_code(caller.identity_id)
@@ -84,7 +86,24 @@ class Handlers:
                 return [OutboundMessage(text=HELP)]
             if message.command == "ferme":
                 return await self._farm_summary(caller, farm)
+        if message.kind is InboundKind.VOICE and self.voice is not None and message.file_id:
+            return await self._voice(self.voice, caller, farm, message)
         return await self.assistant(caller, farm, message)
+
+    async def _voice(
+        self, voice: VoiceService, caller: Caller, farm: FarmRef, message: InboundMessage
+    ) -> list[OutboundMessage]:
+        """Transcrit le vocal, le renvoie à l'utilisateur, puis le traite comme un texte."""
+        result = await voice.transcribe(farm.farm_id, message.file_id or "", message.duration_s)
+        if result.text is None:
+            return [OutboundMessage(text=result.error or "Message vocal illisible.")]
+        heard = OutboundMessage(
+            text=f"🎙️ J'ai compris : « {result.text} »\n(Si c'est faux, écrivez-moi la correction.)"
+        )
+        as_text = message.model_copy(
+            update={"kind": InboundKind.TEXT, "text": result.text, "transcribed": True}
+        )
+        return [heard, *await self.assistant(caller, farm, as_text)]
 
     async def _farm_summary(self, caller: Caller, farm: FarmRef) -> list[OutboundMessage]:
         if caller.user_id is None:

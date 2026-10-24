@@ -27,6 +27,7 @@ from aiffel.settings import Settings, get_settings
 from aiffel.tools.catalog import phase1_tools, propose_tools
 from aiffel.tools.registry import ToolGateway
 from aiffel.vault import Keyring, SecretValue
+from aiffel.voice import VoiceService, WhisperTranscriber
 from aiffel.worker import Worker
 
 
@@ -54,12 +55,18 @@ class Services:
     lexicon: LexiconClient
     actions: ActionService
     orchestrator: Orchestrator | None
+    voice: VoiceService | None = None
     _dispatcher: Dispatcher | None = field(default=None, init=False)
 
     def handlers(self) -> Handlers:
         assistant = self.orchestrator.run_turn if self.orchestrator else placeholder_assistant
         return Handlers(
-            self.pairing, self.farms, self.settings.public_base_url, assistant, self.actions
+            self.pairing,
+            self.farms,
+            self.settings.public_base_url,
+            assistant,
+            self.actions,
+            self.voice,
         )
 
     def dispatcher(self) -> Dispatcher:
@@ -127,13 +134,30 @@ def build_services(settings: Settings | None = None) -> Services:
             model_label=settings.llm_model,
             actions=actions,
         )
+    telegram = TelegramClient(SecretValue(bot_token))
+    voice = (
+        VoiceService(
+            sessions,
+            telegram.download,
+            WhisperTranscriber(
+                settings.whisper_model,
+                settings.whisper_device,
+                settings.whisper_compute_type,
+                settings.whisper_language,
+                settings.whisper_cache_dir,
+            ),
+            max_seconds=settings.voice_max_seconds,
+        )
+        if settings.stt_enabled
+        else None
+    )
     return Services(
         settings=settings,
         engine=engine,
         sessions=sessions,
         keyring=keyring,
         identities=IdentityService(SecretValue(hash_salt), keyring),
-        telegram=TelegramClient(SecretValue(bot_token)),
+        telegram=telegram,
         http=http,
         pairing=PairingService(
             sessions, keyring, http, timedelta(minutes=settings.pairing_code_ttl_minutes)
@@ -142,6 +166,7 @@ def build_services(settings: Settings | None = None) -> Services:
         lexicon=lexicon,
         actions=actions,
         orchestrator=orchestrator,
+        voice=voice,
     )
 
 

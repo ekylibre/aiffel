@@ -9,6 +9,7 @@ import httpx
 
 from aiffel.channels.base import OutboundMessage
 from aiffel.vault import SecretValue
+from aiffel.voice import AudioTooLargeError
 
 # Limite Telegram : 4096 caractères par message.
 MAX_MESSAGE_LENGTH = 4096
@@ -59,6 +60,7 @@ class TelegramClient:
         self._client = httpx.AsyncClient(
             base_url=f"{base_url}/bot{token.reveal()}/", transport=transport, timeout=timeout
         )
+        self._file_base = f"{base_url}/file/bot{token.reveal()}/"
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -105,6 +107,29 @@ class TelegramClient:
             allowed_updates=["message", "callback_query"],
         )
         return list(result or [])
+
+    async def download(self, file_id: str, max_bytes: int) -> bytes:
+        """Contenu d'un fichier envoyé au bot (``getFile``), en mémoire, borné à ``max_bytes``."""
+        info = await self.call("getFile", file_id=file_id)
+        size, path = (info or {}).get("file_size"), (info or {}).get("file_path")
+        if not path:
+            raise TelegramError("getFile : fichier indisponible")
+        if size is not None and int(size) > max_bytes:
+            raise AudioTooLargeError(size)
+        chunks: list[bytes] = []
+        received = 0
+        try:
+            async with self._client.stream("GET", self._file_base + path) as response:
+                if response.status_code != 200:
+                    raise TelegramError(f"téléchargement : {response.status_code}")
+                async for chunk in response.aiter_bytes():
+                    received += len(chunk)
+                    if received > max_bytes:
+                        raise AudioTooLargeError(received)
+                    chunks.append(chunk)
+        except httpx.HTTPError as exc:
+            raise TelegramError(f"téléchargement : erreur réseau ({type(exc).__name__})") from None
+        return b"".join(chunks)
 
     async def set_webhook(self, url: str, secret_token: SecretValue) -> None:
         await self.call(

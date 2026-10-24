@@ -24,6 +24,15 @@ class Settings(BaseSettings):
     agent_max_iterations: int = 8
     lexicon_mcp_url: str = "https://lexicon.osfarm.org/mcp"
 
+    # Vocal (A6) : faster-whisper local, configuration reprise de Duke.
+    stt_enabled: bool = True
+    whisper_model: str = "small"
+    whisper_device: str = "cpu"
+    whisper_compute_type: str = "int8"
+    whisper_language: str = "fr"
+    whisper_cache_dir: str | None = None
+    voice_max_seconds: int = 180
+
     # Secrets : SecretStr empêche leur affichage dans les logs et les repr.
     # Connexion applicative (rôle aiffel_app, soumis à la RLS).
     database_url: SecretStr | None = None
