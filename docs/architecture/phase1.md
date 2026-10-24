@@ -103,6 +103,13 @@ d'authentification figée et vulnérable sur une pile qui ne reçoit plus de cor
 doit venir **avec la montée de version d'Ekylibre** (Ruby ≥ 3.2, Rails ≥ 7.1), ou être porté par un
 fournisseur d'identité externe (Keycloak, Authentik), à étudier à ce moment-là.
 
+**Cible validée (2026-10-24)** : **Keycloak** comme fournisseur d'identité commun (OIDC/OAuth2) à Ekylibre,
+Aiffel et aux futurs connecteurs. Il arrivera avec la refonte d'Ekylibre : modèle et méthodes métier
+conservés, interface entièrement refaite en React. Une première tentative de migration globale (branche
+`6.0-alpha`) a échoué : la refonte doit donc être progressive. Pendant le prototype, Aiffel isole
+l'authentification Ekylibre derrière une interface (`EkylibreAuth`) pour pouvoir passer de `simple-token`
+à un jeton Keycloak sans toucher aux outils.
+
 **Limites du `simple-token` à connaître (constatées dans le code)**
 - **Un seul jeton par utilisateur, partagé** par tous les clients (zero-mobile, Duke, Aiffel) :
   `tokens#create` ne le crée que s'il est vide (`app/controllers/api/v2/tokens_controller.rb`), et
