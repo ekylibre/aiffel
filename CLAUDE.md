@@ -11,6 +11,7 @@ Aiffel est un orchestrateur conversationnel qui fédère les logiciels d'une exp
 
 ```bash
 uv sync                                        # dépendances (Python 3.12 géré par uv)
+uv sync --extra stt                            # + transcription des vocaux (faster-whisper)
 uv run pytest -q                               # tests
 uv run ruff check . && uv run ruff format .    # lint et format
 uv run mypy aiffel                             # typage (strict sur vault/, actions/, tools/)
@@ -72,6 +73,19 @@ docker build -f docker/Dockerfile -t aiffel .  # image
 - Ajouter un outil : un `ToolSpec` dans `aiffel/tools/catalog.py` (modèle Pydantic en entrée, `ToolOutput`
   avec sa source). Les écritures (`access="write"`) sont refusées par la passerelle jusqu'à A5.
 - Schémas des outils Lexicon figés dans `aiffel/connectors/lexicon/tool_schemas.json` (cache de prompt).
+- Écritures (A5) : l'outil `ekylibre_proposer_intervention` (`access="propose"`) crée une `PendingAction`
+  via `aiffel/actions/service.py` ; le récapitulatif affiché est **généré par le code**. Seul le
+  callback du bouton Valider (`aiffel/channels/handlers.py`) appelle `create_intervention`, ce que
+  vérifie `tests/integration/test_validated_writes.py::test_no_code_path_from_the_agent_to_an_ekylibre_write`.
+
+## Vocal (A6)
+
+- `aiffel/voice.py` : `VoiceService` (durée maximale vérifiée **avant** le téléchargement, comptage
+  `usage_metrics.stt_seconds` sous le modèle `stt`) et `WhisperTranscriber` (configuration de Duke :
+  *small*, `int8`, CPU, `fr`, VAD, `beam_size=5`). Le modèle se charge au premier vocal.
+- L'audio reste en mémoire et n'est jamais écrit sur disque ; PyAV décode l'OGG/Opus (pas de ffmpeg).
+- La transcription est renvoyée à l'utilisateur (« J'ai compris : … ») puis traitée comme un texte,
+  marqué `transcribed` : le modèle est prévenu que des mots peuvent être mal reconnus.
 
 ## Conventions
 

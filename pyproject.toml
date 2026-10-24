@@ -22,6 +22,10 @@ dependencies = [
     "mcp>=1.20",
 ]
 
+[project.optional-dependencies]
+# Transcription des vocaux (A6) : ctranslate2 et PyAV, environ 200 Mo, plus le modèle téléchargé.
+stt = ["faster-whisper>=1.1"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",
@@ -57,6 +61,10 @@ plugins = ["pydantic.mypy"]
 warn_unused_ignores = true
 warn_redundant_casts = true
 check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["faster_whisper.*"]
+ignore_missing_imports = true
 
 # Modules sensibles : typage strict (coffre, actions validées, passerelle d'outils).
 [[tool.mypy.overrides]]

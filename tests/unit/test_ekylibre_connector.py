@@ -92,6 +92,7 @@ async def test_client_strips_geometries_and_raises_on_revoked_token() -> None:
         client = EkylibreClient(http, SimpleTokenAuth(), DEMO, creds)
         zones = await client.cultivable_zones()
         assert zones[0] == {"id": 1, "uuid": "u1", "work_number": "P12", "name": "Grands Champs"}
+        assert await client.products("Plant") == [{"id": 11, "name": "Maïs Grands Champs 2026"}]
         fake.revoked.add("TOK-CHEF")
         with pytest.raises(EkylibreUnauthorized):
             await client.cultivable_zones()

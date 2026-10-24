@@ -33,6 +33,8 @@ class InboundMessage(BaseModel):
     callback_data: str | None = None
     language_code: str | None = None
     first_name: str | None = None
+    # Texte issu de la transcription d'un vocal (des mots peuvent être mal reconnus).
+    transcribed: bool = False
 
 
 class Button(BaseModel):

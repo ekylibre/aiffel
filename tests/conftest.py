@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aiffel.db.models import Farm
 from aiffel.db.session import farm_session, make_engine, make_sessionmaker
+from aiffel.settings import Settings
 from aiffel.vault.crypto import Keyring, generate_key, new_wrapped_data_key
+
+# Les tests ne lisent jamais le .env du développeur (vrais jetons, clé maître locale).
+Settings.model_config["env_file"] = None
 
 APP_PASSWORD = "app-test-password"
 

@@ -78,10 +78,18 @@ class EkylibreClient:
         self, product_type: str | None = None, **params: Any
     ) -> list[dict[str, Any]]:
         path = f"products/{product_type}" if product_type else "products"
-        return list(await self.get(path, params))
+        # Les plantes et parcelles portent leur contour (GeoJSON et SVG) : des dizaines de milliers
+        # de jetons par appel, sans utilité pour la conversation.
+        return [
+            {k: v for k, v in p.items() if not k.startswith("shape")}
+            for p in await self.get(path, params) or []
+        ]
 
     async def procedures(self) -> list[dict[str, Any]]:
         return list(await self.get("procedures"))
+
+    async def procedure(self, name: str) -> dict[str, Any]:
+        return dict(await self.get(f"procedures/{name}"))
 
     async def farm_profile(self, harvest_year: int) -> dict[str, Any]:
         return dict(await self.get(f"farm_profiles/{harvest_year}"))
@@ -96,3 +104,38 @@ class EkylibreClient:
 
     async def input_totals(self, campaign: int, **params: Any) -> dict[str, Any]:
         return dict(await self.get("input_totals", {"campaign": campaign, **params}))
+
+    # --- Écriture : appelée uniquement par l'exécution d'une PendingAction validée (ADR-04) ---
+
+    async def create_intervention(self, payload: dict[str, Any]) -> int:
+        """``POST /api/v2/interventions`` ; renvoie l'identifiant créé (ou existant).
+
+        Sûr à rejouer : ``provider.id`` (l'identifiant de la PendingAction) rend l'appel idempotent
+        côté Ekylibre, d'où une seule nouvelle tentative en cas d'erreur réseau.
+        """
+        url = f"{self.instance.base_url}/api/v2/interventions"
+        headers = {
+            **self._auth.headers(self.instance, self._credentials),
+            "Accept": "application/json",
+        }
+        for attempt in range(2):
+            try:
+                response = await self._http.post(url, json=payload, headers=headers)
+            except httpx.TransportError:
+                if attempt == 1:
+                    raise EkylibreError("Ekylibre est injoignable.") from None
+                await asyncio.sleep(1.0)
+                continue
+            if response.status_code == 401:
+                raise EkylibreUnauthorized("Le jeton Ekylibre a été refusé.")
+            if response.status_code in (200, 201):
+                return int(response.json()["id"])
+            try:
+                errors = response.json().get("errors")
+            except ValueError:
+                errors = None
+            detail = "; ".join(map(str, errors))[:300] if isinstance(errors, list) else ""
+            raise EkylibreError(
+                f"Ekylibre a refusé l'intervention ({response.status_code}) {detail}".strip()
+            )
+        raise EkylibreError("échec de l'enregistrement")  # pragma: no cover

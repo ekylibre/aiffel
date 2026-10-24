@@ -8,6 +8,7 @@ import httpx
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from aiffel.actions.service import ActionService
 from aiffel.channels.base import OutboundMessage
 from aiffel.channels.dispatcher import Dispatcher
 from aiffel.channels.handlers import Handlers, placeholder_assistant
@@ -23,9 +24,10 @@ from aiffel.orchestrator.llm import AnthropicProvider
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.pairing import PairingResult, PairingService
 from aiffel.settings import Settings, get_settings
-from aiffel.tools.catalog import phase1_tools
+from aiffel.tools.catalog import phase1_tools, propose_tools
 from aiffel.tools.registry import ToolGateway
 from aiffel.vault import Keyring, SecretValue
+from aiffel.voice import VoiceService, WhisperTranscriber
 from aiffel.worker import Worker
 
 
@@ -51,12 +53,21 @@ class Services:
     pairing: PairingService
     farms: FarmContextService
     lexicon: LexiconClient
+    actions: ActionService
     orchestrator: Orchestrator | None
+    voice: VoiceService | None = None
     _dispatcher: Dispatcher | None = field(default=None, init=False)
 
     def handlers(self) -> Handlers:
         assistant = self.orchestrator.run_turn if self.orchestrator else placeholder_assistant
-        return Handlers(self.pairing, self.farms, self.settings.public_base_url, assistant)
+        return Handlers(
+            self.pairing,
+            self.farms,
+            self.settings.public_base_url,
+            assistant,
+            self.actions,
+            self.voice,
+        )
 
     def dispatcher(self) -> Dispatcher:
         if self._dispatcher is None:
@@ -103,6 +114,7 @@ def build_services(settings: Settings | None = None) -> Services:
     http = httpx.AsyncClient(timeout=20.0, follow_redirects=False)
     farms = FarmContextService(sessions, keyring, http)
     lexicon = LexiconClient(settings.lexicon_mcp_url)
+    actions = ActionService(sessions)
     orchestrator = None
     if settings.anthropic_api_key and settings.anthropic_api_key.get_secret_value():
         provider = AnthropicProvider(
@@ -115,26 +127,46 @@ def build_services(settings: Settings | None = None) -> Services:
             sessions,
             farms,
             provider,
-            ToolGateway(phase1_tools()),
+            ToolGateway([*phase1_tools(), *propose_tools()]),
             AgentRuntime.load(),
             lexicon=lexicon,
             max_iterations=settings.agent_max_iterations,
             model_label=settings.llm_model,
+            actions=actions,
         )
+    telegram = TelegramClient(SecretValue(bot_token))
+    voice = (
+        VoiceService(
+            sessions,
+            telegram.download,
+            WhisperTranscriber(
+                settings.whisper_model,
+                settings.whisper_device,
+                settings.whisper_compute_type,
+                settings.whisper_language,
+                settings.whisper_cache_dir,
+            ),
+            max_seconds=settings.voice_max_seconds,
+        )
+        if settings.stt_enabled
+        else None
+    )
     return Services(
         settings=settings,
         engine=engine,
         sessions=sessions,
         keyring=keyring,
         identities=IdentityService(SecretValue(hash_salt), keyring),
-        telegram=TelegramClient(SecretValue(bot_token)),
+        telegram=telegram,
         http=http,
         pairing=PairingService(
             sessions, keyring, http, timedelta(minutes=settings.pairing_code_ttl_minutes)
         ),
         farms=farms,
         lexicon=lexicon,
+        actions=actions,
         orchestrator=orchestrator,
+        voice=voice,
     )
 
 

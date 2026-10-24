@@ -22,6 +22,10 @@ REDACTED_KEYS = frozenset(
     }
 )
 
+# Bibliothèques qui journalisent les URL appelées au niveau INFO : l'API Bot Telegram porte le
+# jeton du bot dans le chemin (``/bot<jeton>/…``), on ne garde donc que leurs avertissements.
+NOISY_URL_LOGGERS = ("httpx", "httpcore", "mcp.client.streamable_http")
+
 
 def redact(
     _logger: Any, _method: str, event_dict: MutableMapping[str, Any]
@@ -34,6 +38,8 @@ def redact(
 
 def configure_logging(level: str = "INFO") -> None:
     logging.basicConfig(format="%(message)s", level=level)
+    for name in NOISY_URL_LOGGERS:
+        logging.getLogger(name).setLevel(max(logging.WARNING, logging.getLevelName(level)))
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

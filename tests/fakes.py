@@ -6,6 +6,39 @@ from typing import Any
 
 import httpx
 
+PROCEDURES: dict[str, dict[str, Any]] = {
+    "spraying": {
+        "name": "spraying",
+        "human_name": "Pulvérisation",
+        "parameters": [
+            {"name": "cultivation", "type": "target", "handlers": []},
+            {
+                "name": "plant_medicine",
+                "type": "input",
+                "handlers": [
+                    {"name": "population"},
+                    {"name": "net_volume", "indicator": "net_volume", "unit": "liter"},
+                    {"name": "volume_area_density", "indicator": "volume_area_density"},
+                ],
+            },
+            {"name": "sprayer", "type": "tool", "handlers": []},
+            {"name": "driver", "type": "doer", "handlers": []},
+        ],
+    },
+    "fertilizing": {
+        "name": "fertilizing",
+        "human_name": "Fertilisation",
+        "parameters": [
+            {"name": "cultivation", "type": "target", "handlers": []},
+            {
+                "name": "fertilizer",
+                "type": "input",
+                "handlers": [{"name": "net_mass"}, {"name": "mass_area_density"}],
+            },
+        ],
+    },
+}
+
 
 @dataclass
 class FakeAccount:
@@ -37,6 +70,28 @@ class FakeEkylibre:
     )
     revoked: set[str] = field(default_factory=set)
     requests: list[httpx.Request] = field(default_factory=list)
+    products: dict[str, list[dict[str, Any]]] = field(
+        default_factory=lambda: {
+            "LandParcel": [{"id": 10, "name": "Grands Champs (sol)"}],
+            "Plant": [
+                {
+                    "id": 11,
+                    "name": "Maïs Grands Champs 2026",
+                    "shape_geojson": {"type": "MultiPolygon"},
+                    "shape_svg": "<path/>",
+                }
+            ],
+            "Matter": [
+                {"id": 20, "name": "ELUMIS"},
+                {"id": 21, "name": "Ammonitrate 33,5"},
+            ],
+            "Equipment": [{"id": 30, "name": "Pulvérisateur 24 m"}],
+            "Worker": [{"id": 40, "name": "Jeanne Chef"}],
+        }
+    )
+    # Interventions créées, avec idempotence sur (vendor, name, id) du provider comme Ekylibre.
+    interventions: dict[tuple[str, str, str], dict[str, Any]] = field(default_factory=dict)
+    create_status: int = 201
 
     def _account(self, request: httpx.Request) -> FakeAccount | None:
         parts = request.headers.get("authorization", "").split(" ")
@@ -77,6 +132,28 @@ class FakeEkylibre:
             return httpx.Response(200, json={"administrator": account.administrator})
         if path == "/api/v2/cultivable_zones":
             return httpx.Response(200, json=self.zones)
+        if path.startswith("/api/v2/products/"):
+            return httpx.Response(200, json=self.products.get(path.rsplit("/", 1)[1], []))
+        if path.startswith("/api/v2/procedures/"):
+            name = path.rsplit("/", 1)[1]
+            if name not in PROCEDURES:
+                return httpx.Response(404, json={"errors": ["not found"]})
+            return httpx.Response(200, json=PROCEDURES[name])
+        if path == "/api/v2/procedures":
+            return httpx.Response(
+                200,
+                json=[{"name": n, "human_name": p["human_name"]} for n, p in PROCEDURES.items()],
+            )
+        if path == "/api/v2/interventions" and request.method == "POST":
+            if self.create_status >= 400:
+                return httpx.Response(self.create_status, json={"errors": ["Cible invalide"]})
+            body = json.loads(request.content)
+            provider = body.get("provider") or {}
+            key = (provider.get("vendor"), provider.get("name"), provider.get("id"))
+            if key in self.interventions:
+                return httpx.Response(200, json={"id": self.interventions[key]["id"]})
+            self.interventions[key] = {"id": 1000 + len(self.interventions), "body": body}
+            return httpx.Response(201, json={"id": self.interventions[key]["id"]})
         return httpx.Response(404, json={"message": "Not found"})
 
     def client(self) -> httpx.AsyncClient:

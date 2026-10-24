@@ -3,11 +3,13 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from aiffel.actions.service import ActionService, Outcome, parse_callback
 from aiffel.channels.base import Button, InboundKind, InboundMessage, OutboundMessage
 from aiffel.channels.dispatcher import UNSUPPORTED, WELCOME, Caller
 from aiffel.connectors.ekylibre.client import EkylibreError, EkylibreUnauthorized
 from aiffel.farm_context import FarmContextService, FarmRef
 from aiffel.pairing import PairingService
+from aiffel.voice import VoiceService
 
 HELP = (
     "Voici ce que je sais faire pour l'instant :\n"
@@ -41,6 +43,8 @@ class Handlers:
     farms: FarmContextService
     public_base_url: str
     assistant: Assistant = placeholder_assistant
+    actions: ActionService | None = None
+    voice: VoiceService | None = None
 
     async def invite(self, caller: Caller, intro: str) -> list[OutboundMessage]:
         code = await self.pairing.create_code(caller.identity_id)
@@ -69,6 +73,9 @@ class Handlers:
         if farm is None:
             return await self.invite(caller, NO_FARM)
 
+        if message.kind is InboundKind.CALLBACK:
+            # Les boutons ne passent jamais par le modèle (ADR-04).
+            return await self._callback(caller, farm, message)
         if message.kind is InboundKind.COMMAND:
             if message.command == "start":
                 access = await self.farms.ekylibre(farm, caller.user_id)
@@ -79,7 +86,24 @@ class Handlers:
                 return [OutboundMessage(text=HELP)]
             if message.command == "ferme":
                 return await self._farm_summary(caller, farm)
+        if message.kind is InboundKind.VOICE and self.voice is not None and message.file_id:
+            return await self._voice(self.voice, caller, farm, message)
         return await self.assistant(caller, farm, message)
+
+    async def _voice(
+        self, voice: VoiceService, caller: Caller, farm: FarmRef, message: InboundMessage
+    ) -> list[OutboundMessage]:
+        """Transcrit le vocal, le renvoie à l'utilisateur, puis le traite comme un texte."""
+        result = await voice.transcribe(farm.farm_id, message.file_id or "", message.duration_s)
+        if result.text is None:
+            return [OutboundMessage(text=result.error or "Message vocal illisible.")]
+        heard = OutboundMessage(
+            text=f"🎙️ J'ai compris : « {result.text} »\n(Si c'est faux, écrivez-moi la correction.)"
+        )
+        as_text = message.model_copy(
+            update={"kind": InboundKind.TEXT, "text": result.text, "transcribed": True}
+        )
+        return [heard, *await self.assistant(caller, farm, as_text)]
 
     async def _farm_summary(self, caller: Caller, farm: FarmRef) -> list[OutboundMessage]:
         if caller.user_id is None:
@@ -103,3 +127,37 @@ class Handlers:
             lines.append(f"… et {len(names) - MAX_LISTED_ZONES} autres.")
         lines.append("\nSource : Ekylibre")
         return [OutboundMessage(text="\n".join(lines))]
+
+    async def _callback(
+        self, caller: Caller, farm: FarmRef, message: InboundMessage
+    ) -> list[OutboundMessage]:
+        parsed = parse_callback(message.callback_data)
+        if parsed is None or self.actions is None or caller.user_id is None:
+            return [OutboundMessage(text="Ce bouton n'est plus valable.")]
+        if parsed.verb == "c":
+            return [
+                OutboundMessage(
+                    text="D'accord. Dites-moi ce qu'il faut corriger "
+                    "(date, parcelle, produit, dose…)."
+                )
+            ]
+        if parsed.verb == "x":
+            cancelled = await self.actions.cancel(farm.farm_id, caller.user_id, parsed)
+            return [OutboundMessage(text=cancelled.text)]
+
+        access = await self.farms.ekylibre(farm, caller.user_id)
+        if access is None or access.client is None:
+            return [OutboundMessage(text=RECONNECT)]
+        outcome: Outcome = await self.actions.validate(
+            farm.farm_id, caller.user_id, parsed, access.client.create_intervention
+        )
+        if not outcome.ok and "reconnecter" in outcome.text:
+            await self.farms.mark_needs_reconnect(farm, access.connection_id, caller.user_id)
+        if outcome.ok and outcome.external_ref:
+            link = f"{access.client.instance.base_url}/backend/interventions/{outcome.external_ref}"
+            return [
+                OutboundMessage(
+                    text=outcome.text, buttons=[[Button(label="Voir dans Ekylibre", url=link)]]
+                )
+            ]
+        return [OutboundMessage(text=outcome.text)]
