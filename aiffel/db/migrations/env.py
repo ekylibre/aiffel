@@ -45,7 +45,11 @@ def _run(connection: Connection) -> None:
 
 
 async def _main() -> None:
-    engine = create_async_engine(_url(), poolclass=pool.NullPool)
+    # Si l'utilisateur Postgres s'appelle « aiffel », le schéma aiffel deviendrait le schéma par
+    # défaut et Alembic ne le comparerait plus : public est imposé dès la connexion.
+    engine = create_async_engine(
+        _url(), poolclass=pool.NullPool, connect_args={"options": "-c search_path=public"}
+    )
     async with engine.begin() as connection:
         await connection.run_sync(_run)
     await engine.dispose()

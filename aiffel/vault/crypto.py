@@ -18,7 +18,9 @@ import uuid
 from dataclasses import dataclass
 
 from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 KEY_BYTES = 32
 NONCE_BYTES = 12
@@ -145,3 +147,34 @@ def decrypt_secret(data_key: bytes, aad: bytes, ciphertext: bytes, nonce: bytes)
         return SecretValue(AESGCM(data_key).decrypt(nonce, ciphertext, aad).decode())
     except InvalidTag as exc:
         raise VaultError("secret illisible (altéré ou rattaché à une autre ligne)") from exc
+
+
+# --- Données globales (hors ferme), par exemple les identifiants de canal chiffrés. ---
+# Clé dérivée de la clé maître par HKDF, une par version et par usage : la rotation de la clé
+# maître s'applique aussi à ces données.
+
+
+def _derived_key(keyring: Keyring, version: int, purpose: str) -> bytes:
+    hkdf = HKDF(algorithm=hashes.SHA256(), length=KEY_BYTES, salt=None, info=purpose.encode())
+    return hkdf.derive(keyring.keys[version])
+
+
+def encrypt_global(keyring: Keyring, purpose: str, value: str) -> bytes:
+    """Chiffre une donnée hors ferme (format : version | nonce | chiffré)."""
+    nonce = os.urandom(NONCE_BYTES)
+    key = _derived_key(keyring, keyring.current, purpose)
+    aad = purpose.encode()
+    return bytes([keyring.current]) + nonce + AESGCM(key).encrypt(nonce, value.encode(), aad)
+
+
+def decrypt_global(keyring: Keyring, purpose: str, blob: bytes) -> str:
+    if len(blob) < 1 + NONCE_BYTES + 16:
+        raise VaultError("donnée chiffrée tronquée")
+    version, nonce, ciphertext = blob[0], blob[1 : 1 + NONCE_BYTES], blob[1 + NONCE_BYTES :]
+    if version not in keyring.keys:
+        raise VaultError(f"clé maître version {version} absente du trousseau")
+    key = _derived_key(keyring, version, purpose)
+    try:
+        return AESGCM(key).decrypt(nonce, ciphertext, purpose.encode()).decode()
+    except InvalidTag as exc:
+        raise VaultError("donnée globale illisible") from exc

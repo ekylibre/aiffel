@@ -117,6 +117,8 @@ class ChannelIdentity(Base):
     channel: Mapped[str] = mapped_column(String(20))
     # Identifiant externe (chat_id Telegram) haché avec sel : jamais stocké en clair.
     external_id_hash: Mapped[str] = mapped_column(String(64))
+    # Identifiant externe chiffré (clé dérivée de la clé maître), pour les messages proactifs.
+    external_id_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
     paired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at()
 
@@ -300,3 +302,35 @@ class UsageMetric(Base):
     tokens_in: Mapped[int] = mapped_column(BigInteger, server_default="0")
     tokens_out: Mapped[int] = mapped_column(BigInteger, server_default="0")
     stt_seconds: Mapped[int] = mapped_column(Integer, server_default="0")
+
+
+INBOUND_JOB_STATUSES = ("pending", "processing", "done", "failed")
+
+
+class InboundJob(Base):
+    """File des messages entrants (table Postgres, ``FOR UPDATE SKIP LOCKED``).
+
+    Globale : la ferme n'est connue qu'après résolution de l'identité. Le contenu brut (``payload``)
+    est effacé dès le traitement terminé, pour ne pas conserver de message en clair.
+    """
+
+    __tablename__ = "inbound_jobs"
+    __table_args__ = (
+        UniqueConstraint("channel", "external_update_id"),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{s}'" for s in INBOUND_JOB_STATUSES) + ")",
+            name="status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    channel: Mapped[str] = mapped_column(String(20))
+    # Identifiant de l'événement chez le canal (update_id Telegram) : déduplique les renvois.
+    external_update_id: Mapped[int] = mapped_column(BigInteger)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(20), server_default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, server_default="0")
+    run_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = _created_at()
