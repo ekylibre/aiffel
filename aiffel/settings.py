@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +34,24 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     telegram_webhook_secret: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
+
+    @field_validator(
+        "database_url",
+        "migration_database_url",
+        "master_key",
+        "hash_salt",
+        "telegram_bot_token",
+        "telegram_webhook_secret",
+        "anthropic_api_key",
+        mode="before",
+    )
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        # « AIFFEL_X= » dans .env vaut « non défini » : un secret vide activerait sinon le
+        # webhook Telegram en acceptant les requêtes sans en-tête secret.
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 @lru_cache
