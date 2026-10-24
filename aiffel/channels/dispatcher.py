@@ -14,8 +14,16 @@ from aiffel.channels.base import InboundKind, InboundMessage, OutboundMessage
 from aiffel.channels.identity import IdentityService
 from aiffel.db.session import global_session
 
-PairedHandler = Callable[[uuid.UUID, InboundMessage], Awaitable[list[OutboundMessage]]]
-UnpairedHandler = Callable[[uuid.UUID, InboundMessage], Awaitable[list[OutboundMessage]]]
+
+@dataclass(frozen=True)
+class Caller:
+    """Auteur d'un message : son identité de canal et, s'il est appairé, son utilisateur."""
+
+    identity_id: uuid.UUID
+    user_id: uuid.UUID | None
+
+
+Handler = Callable[[Caller, InboundMessage], Awaitable[list[OutboundMessage]]]
 
 WELCOME = (
     "Bonjour, je suis Aiffel, l'assistant de votre exploitation. 🌾\n\n"
@@ -28,15 +36,13 @@ NOT_PAIRED = (
 UNSUPPORTED = "Je ne sais pas encore traiter ce type de message. Écrivez-moi ou envoyez un vocal."
 
 
-async def default_unpaired(
-    identity_id: uuid.UUID, message: InboundMessage
-) -> list[OutboundMessage]:
+async def default_unpaired(_caller: Caller, message: InboundMessage) -> list[OutboundMessage]:
     if message.kind is InboundKind.COMMAND and message.command == "start":
         return [OutboundMessage(text=WELCOME)]
     return [OutboundMessage(text=NOT_PAIRED)]
 
 
-async def placeholder_paired(_user_id: uuid.UUID, message: InboundMessage) -> list[OutboundMessage]:
+async def placeholder_paired(_caller: Caller, message: InboundMessage) -> list[OutboundMessage]:
     if message.kind is InboundKind.UNSUPPORTED:
         return [OutboundMessage(text=UNSUPPORTED)]
     return [OutboundMessage(text="Message reçu. L'assistant arrive très bientôt.")]
@@ -46,15 +52,15 @@ async def placeholder_paired(_user_id: uuid.UUID, message: InboundMessage) -> li
 class Dispatcher:
     sessions: async_sessionmaker[AsyncSession]
     identities: IdentityService
-    on_unpaired: UnpairedHandler = default_unpaired
-    on_paired: PairedHandler = placeholder_paired
+    on_unpaired: Handler = default_unpaired
+    on_paired: Handler = placeholder_paired
 
     async def handle(self, message: InboundMessage) -> list[OutboundMessage]:
         async with global_session(self.sessions) as session:
             identity = await self.identities.resolve(
                 session, message.channel, message.external_user_id
             )
-            identity_id, user_id = identity.id, identity.user_id
-        if user_id is None:
-            return await self.on_unpaired(identity_id, message)
-        return await self.on_paired(user_id, message)
+            caller = Caller(identity_id=identity.id, user_id=identity.user_id)
+        if caller.user_id is None:
+            return await self.on_unpaired(caller, message)
+        return await self.on_paired(caller, message)

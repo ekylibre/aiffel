@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Connexion à Ekylibre — Aiffel{% endblock %}
+{% block content %}
+<h1>Relier votre ferme</h1>
+<p>Connectez-vous avec votre compte Ekylibre. Aiffel garde seulement un jeton d'accès chiffré : votre mot de passe n'est pas conservé.</p>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/connect" autocomplete="on">
+  <input type="hidden" name="c" value="{{ code }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="instance">Adresse de votre ferme</label>
+  <input id="instance" name="instance" required placeholder="demo.ekylibre-dev.com" value="{{ instance }}" autocapitalize="none" spellcheck="false" inputmode="url">
+  <small>Le début de l'adresse que vous utilisez pour ouvrir Ekylibre.</small>
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email" required autocomplete="username" value="{{ email }}">
+  <label for="password">Mot de passe Ekylibre</label>
+  <input id="password" name="password" type="password" required autocomplete="current-password">
+  <button type="submit">Me connecter</button>
+</form>
+{% endblock %}
