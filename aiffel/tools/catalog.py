@@ -126,7 +126,9 @@ async def _input_totals(ctx: ToolContext, args: InputTotalsInput) -> ToolOutput:
     return ToolOutput(data, f"{EKYLIBRE}, totaux d'intrants {campaign}")
 
 
-ProductType = Literal["Matter", "Equipment", "Worker", "Plant", "LandParcel", "Animal"]
+ProductType = Literal[
+    "Matter", "Equipment", "Worker", "Plant", "LandParcel", "Animal", "BuildingDivision"
+]
 
 
 class ProductsInput(BaseModel):
@@ -341,7 +343,16 @@ def phase1_tools() -> list[ToolSpec]:
 # --- Proposition d'intervention (A5) : jamais d'écriture directe ---
 
 PARIS = ZoneInfo("Europe/Paris")
-PRODUCT_TYPES = ("LandParcel", "Plant", "Matter", "Equipment", "Worker")
+# Cibles possibles : cultures et parcelles, mais aussi animaux et bâtiments (soins, nettoyage…).
+PRODUCT_TYPES = (
+    "LandParcel",
+    "Plant",
+    "Animal",
+    "BuildingDivision",
+    "Matter",
+    "Equipment",
+    "Worker",
+)
 
 
 class ProposedInput(BaseModel):
