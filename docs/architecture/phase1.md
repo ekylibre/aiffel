@@ -10,7 +10,7 @@
 |---|---|
 | UC-1 : enregistrer une intervention par texte ou vocal sur Telegram, avec validation | Interface web complète (phase 2) |
 | UC-2 : interroger ses données Ekylibre + Lexicon, avec citation des sources | Lyvre, PAC, compta (phase 3) |
-| Appairage Telegram ↔ ferme et connexion OAuth2 à Ekylibre (mini page web) | Logiciels propriétaires et coffre de mots de passe (phase 4) |
+| Appairage Telegram ↔ ferme et connexion à Ekylibre par `simple-token` (mini page web) | Logiciels propriétaires et coffre de mots de passe (phase 4) |
 | Plusieurs fermes et plusieurs utilisateurs par ferme (exploitant, salarié) | Conseiller multi-fermes et délégation (phase 2) |
 | Déploiement du prototype sur Dokploy (`app.aiffel.org`) | Mobile, marketplace, tâches planifiées (à partir de la phase 2) |
 
@@ -71,8 +71,8 @@
 - L'agent ne voit que des outils **filtrés** par les capacités de la ferme et le rôle de l'utilisateur.
 
 ### ADR-06 — Identifiants : **coffre minimal intégré** (chiffrement d'enveloppe), interface prête pour OpenBao
-- Phase 1 : uniquement des jetons OAuth2 Ekylibre (accès et rafraîchissement) et le jeton du bot Telegram
-  (variable d'environnement). **Aucun mot de passe utilisateur n'est stocké.**
+- Phase 1 : uniquement les `simple-token` Ekylibre et le jeton du bot Telegram (variable d'environnement).
+  **Aucun mot de passe utilisateur n'est stocké** : il ne sert qu'une fois, pour obtenir le jeton (ADR-07).
 - Une clé de données par ferme chiffre ses secrets (AES-256-GCM) ; cette clé est elle-même chiffrée par une
   clé maître (`AIFFEL_MASTER_KEY`, variable d'environnement Dokploy, puis KMS ou OpenBao). Les secrets sont
   déchiffrés **uniquement dans le connecteur, au moment de l'appel** : jamais dans le prompt, les logs ou les
@@ -82,24 +82,55 @@
 - **OneCLI n'est pas retenu pour le cœur** : sous la forme utilisée dans le pilote, c'est un service
   externe (`app.onecli.sh`), incompatible avec l'auto-hébergement et la souveraineté (NF-DEP, NF-SOUV).
 
-### ADR-07 — Ekylibre : **OAuth2 (Doorkeeper) avec portées**, l'API simple-token étant conservée
-- Ajout de Doorkeeper à Ekylibre (version compatible Rails 5.2, à vérifier), avec le flux *authorization
-  code + PKCE*. L'écran de consentement est servi **par le sous-domaine de la ferme**
-  (`demo.ekylibre-dev.com/oauth/authorize`).
-- Portées : `profile:read`, `zones:read`, `products:read`, `interventions:read`, `interventions:write`,
-  `farm:read`.
-- Jeton d'accès court (1 h) et jeton de rafraîchissement révocable depuis Ekylibre (« Applications connectées »).
-- Multi-tenant : les tables Doorkeeper vivent dans le schéma du tenant, comme les `users` ; l'application
-  OAuth « Aiffel » est enregistrée par tenant au premier raccordement (ou partagée via le schéma `public`,
-  à trancher dans l'implémentation).
-- `simple-token` reste en place pour zero-mobile et Duke ; Aiffel ne l'utilise pas.
+### ADR-07 — Ekylibre : **`simple-token` pour le prototype**, OAuth2 reporté (étude de faisabilité ci-dessous)
+
+**Décision (2026-10-24)** : la phase de prototypage utilise le `simple-token` existant. On n'ajoute à
+Ekylibre **que les endpoints de lecture nécessaires** (§7). OAuth2 est reporté.
+
+**Étude de faisabilité d'OAuth2 (Doorkeeper) sur la pile actuelle**
+
+| Élément | Constat |
+|---|---|
+| Pile | Ruby **2.6.6** (fin de vie : mars 2022), Rails **5.2.8.1** (fin de support : juin 2022), image `ruby2.6` |
+| Doorkeeper récent (5.6.3 → 5.9.9) | Exige **Ruby ≥ 2.7** : impossible à installer |
+| Dernière version installable | **5.6.2** (novembre 2022, `railties >= 5`), sans correctif depuis près de 4 ans |
+| Vulnérabilité connue | **CVE-2023-34246** (GHSA-7w2c-w47h-789w, gravité moyenne) : consentement contourné pour les clients publics déjà approuvés, corrigée en 5.6.6 (Ruby 2.7). On pourrait l'éviter (Aiffel serait un client confidentiel, sans `skip_authorization`), mais on partirait d'une version vulnérable et figée |
+| Multi-tenant `apartment` | Tables OAuth dans chaque schéma de tenant (migrations à jouer sur tous les tenants) ou dans `public` (exclusion de modèles : `excluded_models` est vide aujourd'hui, ce serait un premier cas), puis le flux de consentement par sous-domaine à tester |
+| Travail estimé | 5 à 8 jours : gem, migrations multi-tenant, écran de consentement, page « Applications connectées », contrôle des portées dans `Api::V2::BaseController`, tests |
+
+**Conclusion** : techniquement faisable, mais **déconseillé maintenant**. On ajouterait une brique
+d'authentification figée et vulnérable sur une pile qui ne reçoit plus de correctifs de sécurité. OAuth2
+doit venir **avec la montée de version d'Ekylibre** (Ruby ≥ 3.2, Rails ≥ 7.1), ou être porté par un
+fournisseur d'identité externe (Keycloak, Authentik), à étudier à ce moment-là.
+
+**Limites du `simple-token` à connaître (constatées dans le code)**
+- **Un seul jeton par utilisateur, partagé** par tous les clients (zero-mobile, Duke, Aiffel) :
+  `tokens#create` ne le crée que s'il est vide (`app/controllers/api/v2/tokens_controller.rb`), et
+  `DELETE /api/v2/tokens/:id` le remet à `nil`. **Une déconnexion côté mobile coupe donc Aiffel**, et inversement.
+- Stocké **en clair** dans `users.authentication_token`, sans expiration ni portée : il donne tous les droits de l'utilisateur.
+- On l'obtient avec l'email et le mot de passe (`POST /api/v2/tokens`).
+
+**Mesures pour le prototype**
+1. **Raccordement** : sur la mini page web d'Aiffel (HTTPS), l'utilisateur saisit l'adresse de sa ferme,
+   son email et son mot de passe Ekylibre. Aiffel appelle `POST /api/v2/tokens` et **ne garde que le jeton**,
+   chiffré (ADR-06). Le mot de passe n'est jamais stocké ni journalisé.
+2. Aiffel **n'appelle jamais** `DELETE /api/v2/tokens` (ce qui déconnecterait les autres clients). Un
+   `401` met la connexion en état « à reconnecter » et l'utilisateur est prévenu sur Telegram.
+3. **Moindre privilège côté Aiffel** : l'adaptateur n'expose que les outils de la phase 1 (§5). Aucun
+   appel API hors de cette liste n'est possible, même si le jeton le permettrait.
+4. Le prototype est **réservé aux fermes pilotes** (`demo` et quelques exploitations volontaires informées).
+5. **Critère de sortie du prototype** : avant toute ouverture plus large, il faut des jetons à portée
+   limitée. L'option intermédiaire la moins chère est une table `api_tokens` par tenant (empreinte du
+   jeton, portées, expiration, révocation, libellé « Aiffel »), créée depuis le profil Ekylibre et vérifiée
+   dans `Api::V2::BaseController`. C'est sans gem, environ 2 jours, compatible Ruby 2.6. Autre option :
+   OAuth2 après la montée de version.
 
 ### ADR-08 — Duke : **pas de dépendance en phase 1, réutilisation de ses actifs**
 - Aiffel n'appelle pas Duke au runtime en phase 1. Il reprend son **corpus d'évaluation**, sa **logique
   de correspondance Procedo** et son **analyse des dates en français**. Détails et justification au §8.
 
 ### ADR-09 — Pile technique : **Python 3.12**
-- FastAPI (webhook Telegram, callback OAuth, mini pages web), `python-telegram-bot` (ou aiogram), SDK
+- FastAPI (webhook Telegram, mini pages web de raccordement), `python-telegram-bot` (ou aiogram), SDK
   `anthropic`, SDK `mcp` (client), SQLAlchemy 2 + Alembic, PostgreSQL 16, `httpx`, Pydantic v2.
 - Transcription vocale : `faster-whisper` (modèle *small*, CPU) dans un worker, auto-hébergé (NF-SOUV).
 - File de tâches : table Postgres (`SELECT … FOR UPDATE SKIP LOCKED`) en phase 1, sans Redis.
@@ -125,7 +156,7 @@ flowchart LR
     DB[(PostgreSQL<br/>RLS par ferme)]
   end
   LLM[[Fournisseur LLM<br/>Anthropic → Mistral/Ollama]]
-  EKY[Ekylibre<br/>&lt;ferme&gt;.ekylibre-dev.com<br/>API v2 + OAuth2]
+  EKY[Ekylibre<br/>&lt;ferme&gt;.ekylibre-dev.com<br/>API v2 simple-token]
   LEX[Lexicon MCP<br/>lexicon.osfarm.org/mcp]
 
   TG --> GW
@@ -150,7 +181,7 @@ n'utilise pas le réseau Docker interne du staging. On garde ainsi la même isol
 
 ## 4. Flux principaux
 
-### 4.1 Appairage et connexion à Ekylibre
+### 4.1 Appairage et connexion à Ekylibre (prototype, `simple-token`)
 ```mermaid
 sequenceDiagram
   actor U as Exploitant
@@ -160,13 +191,11 @@ sequenceDiagram
   U->>T: /start
   T->>A: webhook (chat_id inconnu)
   A-->>T: lien à usage unique app.aiffel.org/connect?c=XXXX (15 min)
-  U->>A: ouvre le lien, saisit l'adresse de sa ferme Ekylibre
-  A->>E: redirection /oauth/authorize (PKCE, portées)
-  U->>E: se connecte et consent
-  E->>A: /oauth/callback?code=…
-  A->>E: échange du code → jetons
-  A->>E: GET /api/v2/users/me (rôle, nom, ferme)
-  A->>A: crée farm + membership + connection (jetons chiffrés), lie le chat_id
+  U->>A: ouvre le lien, saisit l'adresse de la ferme, son email et son mot de passe Ekylibre
+  A->>E: POST /api/v2/tokens (email, mot de passe)
+  E-->>A: {token}
+  A->>E: GET /api/v2/users/me (simple-token + X-Tenant)
+  A->>A: crée farm + membership + connection (jeton chiffré ; mot de passe oublié aussitôt), lie le chat_id
   A-->>T: « Connecté à la ferme Demo ✅ »
 ```
 - Un deuxième utilisateur (salarié) de la même ferme suit le même parcours avec **son propre compte
@@ -213,7 +242,7 @@ sequenceDiagram
 
 | Outil | Source | R/W | Portée |
 |---|---|---|---|
-| `ekylibre.find_zones(query)` | `GET /cultivable_zones` (+ alias de la mémoire) | R | `zones:read` |
+| `ekylibre.find_zones(query)` | `GET /cultivable_zones` (+ alias de la mémoire) | R | `zones:read`¹ |
 | `ekylibre.find_products(query, type)` | `GET /products/:type` | R | `products:read` |
 | `ekylibre.list_procedures()` / `get_procedure(name)` | `GET /procedures` | R | — |
 | `ekylibre.search_interventions(filters)` | **nouvel endpoint** (§7) | R | `interventions:read` |
@@ -225,6 +254,7 @@ sequenceDiagram
 | `memory.propose_fact(fact)` | `farm_memory` (après confirmation) | W* | — |
 
 \* Écriture **différée** : elle n'a lieu qu'après validation hors modèle (ADR-04).
+¹ Les portées sont appliquées **côté Aiffel** pendant le prototype (le `simple-token` n'en a pas) ; elles serviront telles quelles quand Ekylibre aura des jetons à portée limitée.
 
 ## 6. Modèle de données (Postgres, schéma `aiffel`)
 
@@ -261,17 +291,18 @@ erDiagram
 
 ## 7. Évolutions requises dans Ekylibre (branche `5.0-beta`)
 
-1. **OAuth2 Doorkeeper** avec portées, écran de consentement et page « Applications connectées » (révocation) — ADR-07.
-2. **Contrôle des portées** dans `Api::V2::BaseController` (un jeton OAuth n'accède qu'aux ressources de ses portées).
-3. **Lecture des interventions réalisées** : `GET /api/v2/interventions` est aujourd'hui orienté vers les
-   demandes en cours (mobile). Ajout de `GET /api/v2/intervention_records` (filtres : période, parcelle ou
-   production, procédure, intrant, campagne ; pagination).
-4. **Agrégats d'intrants** : `GET /api/v2/input_totals` (quantités et unités par production, campagne et
-   intrant), pour répondre à « combien d'azote sur mes blés ».
-5. **Productions de la campagne** : `GET /api/v2/activity_productions?campaign=` (culture, surface, parcelles).
-6. Mise à jour de `docs/api/openapi-v2.yaml` et tests Minitest pour chaque endpoint.
+Phase de prototypage : **uniquement des endpoints de lecture**. On ne touche pas à l'authentification (ADR-07).
 
-Ces évolutions profitent aussi à zero-mobile et Duke ; elles restent à **valider avec l'équipe Ekylibre**.
+1. **Interventions réalisées** : `GET /api/v2/intervention_records`. L'actuel `GET /api/v2/interventions`
+   est orienté vers les demandes en cours (mobile). Filtres : période, parcelle ou production, procédure,
+   intrant, campagne ; pagination.
+2. **Agrégats d'intrants** : `GET /api/v2/input_totals` (quantités et unités par production, campagne et
+   intrant), pour répondre par exemple à « combien d'azote sur mes blés ».
+3. **Productions de la campagne** : `GET /api/v2/activity_productions?campaign=` (culture, surface, parcelles).
+4. Pour chacun : documentation dans `docs/api/openapi-v2.yaml` et tests Minitest.
+
+Ces endpoints profitent aussi à zero-mobile et à Duke (qui pourrait abandonner sa lecture directe de la
+base, §8). Ils restent à valider avec l'équipe Ekylibre.
 
 ## 8. Place de Duke (ADR-08)
 
@@ -285,8 +316,8 @@ Constat (dépôt `/home/djoulin/projects/duke`, v0.1.0, 152 tests) :
 
 **Décision : Aiffel ne dépend pas de Duke au runtime en phase 1.**
 - Un accès direct à la base est **incompatible avec le principe d'Aiffel** : se connecter à n'importe quelle
-  instance Ekylibre (SaaS ou auto-hébergée) par son API et OAuth, sans jamais avoir de DSN de base.
-  Il impose aussi le jeton complet `simple-token`, que l'ADR-07 cherche justement à éviter.
+  instance Ekylibre (SaaS ou auto-hébergée) par son API, sans jamais avoir de DSN de base.
+  Ce point reste vrai même si Aiffel utilise lui aussi `simple-token` pendant le prototype.
 - **Ce qui est réutilisé** dans Aiffel :
   1. le **corpus de 267 phrases** (`tests/fixtures/golden_phrases.yaml`), comme jeu d'évaluation de UC-1
      (objectif : au moins autant de bonnes extractions que Duke) ;
@@ -304,9 +335,9 @@ Constat (dépôt `/home/djoulin/projects/duke`, v0.1.0, 152 tests) :
 | Menace | Mesure |
 |---|---|
 | Injection de prompt (message Telegram, contenu Lexicon ou Ekylibre) | Pas d'outil générique ; les outils d'écriture ne font que proposer ; validation hors modèle ; les données d'outils sont marquées comme données, jamais comme instructions |
-| Usurpation d'un utilisateur Telegram | Appairage par OAuth Ekylibre ; `chat_id` haché avec sel ; secret du webhook (`X-Telegram-Bot-Api-Secret-Token`) |
+| Usurpation d'un utilisateur Telegram | Appairage par lien à usage unique + identifiants Ekylibre ; `chat_id` haché avec sel ; secret du webhook (`X-Telegram-Bot-Api-Secret-Token`) |
 | Fuite entre fermes | `farm_id` injecté par la passerelle, RLS Postgres, tests d'isolation automatisés (ferme A ne lit jamais B) |
-| Vol de jetons Ekylibre | Chiffrement d'enveloppe, jetons courts, révocation côté Ekylibre, portées minimales |
+| Vol de jetons Ekylibre | Chiffrement d'enveloppe ; outils limités côté Aiffel ; fermes pilotes uniquement ; jetons à portée limitée avant toute ouverture (ADR-07) |
 | Serveur partagé avec d'autres projets | Aucun socket Docker, aucun port exposé hors Traefik, utilisateur non root, réseau Docker propre à Aiffel |
 | Validation détournée | Le bouton Valider vérifie le rôle, l'expiration et l'empreinte de la proposition ; l'idempotence empêche les doublons |
 | Logs | Ni contenu utilisateur, ni jeton, ni email ; identifiants hachés |
@@ -314,7 +345,7 @@ Constat (dépôt `/home/djoulin/projects/duke`, v0.1.0, 152 tests) :
 ## 10. Déploiement du prototype
 
 - **Dokploy**, projet `aiffel`, environnement `production` : une application *compose* avec
-  - `aiffel-app` (FastAPI : webhook Telegram, OAuth, mini web, orchestrateur) ;
+  - `aiffel-app` (FastAPI : webhook Telegram, mini web, orchestrateur) ;
   - `aiffel-worker` (STT faster-whisper et tâches en file) ;
   - `aiffel-db` (PostgreSQL 16, volume sauvegardé).
 - **DNS Gandi** : `app.aiffel.org` (A/AAAA vers le serveur `lavz`), avec HTTPS par Traefik/Let's Encrypt
@@ -323,7 +354,7 @@ Constat (dépôt `/home/djoulin/projects/duke`, v0.1.0, 152 tests) :
 - **Secrets** (variables Dokploy) : `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY`,
   `AIFFEL_MASTER_KEY`, `DATABASE_URL`.
 - **Ressources estimées** : environ 2 Go de RAM (dont environ 1 Go pour Whisper *small*), sur les 23 Go disponibles.
-- **Ferme de test** : `demo.ekylibre-dev.com`, une fois Doorkeeper déployé sur le staging.
+- **Ferme de test** : `demo.ekylibre-dev.com`, une fois les nouveaux endpoints (§7) déployés sur le staging.
 
 ## 11. Correspondance avec les exigences
 
@@ -342,7 +373,7 @@ Constat (dépôt `/home/djoulin/projects/duke`, v0.1.0, 152 tests) :
 
 ## 12. Points ouverts
 
-1. Version de Doorkeeper compatible avec Rails 5.2 / Ruby 2.6, et emplacement des tables OAuth avec `apartment`.
+1. Calendrier de la montée de version d'Ekylibre (Ruby/Rails), qui conditionne OAuth2 ; d'ici là, faut-il faire la table `api_tokens` (environ 2 jours) ?
 2. Fournisseur LLM de la phase 1 (proposition : Claude Sonnet pour l'agent, Haiku pour les tâches simples, Mistral en option).
 3. Durée de rétention des conversations (RGPD).
 4. Validation des nouveaux endpoints par l'équipe Ekylibre.
