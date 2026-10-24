@@ -62,6 +62,17 @@ docker build -f docker/Dockerfile -t aiffel .  # image
   `uv run python -c "from aiffel.vault import generate_key; print(generate_key())"`). **La perdre rend
   tous les secrets illisibles** : il faut une copie hors ligne.
 
+## Agent (A4)
+
+- Boucle d'outils maison sur l'API Messages (`aiffel/orchestrator/`), modèle `AIFFEL_LLM_MODEL`
+  (Claude Opus 5.5 par défaut), effort `AIFFEL_LLM_EFFORT`, repli serveur `fallbacks: "default"`.
+- Prompt système = partie **stable** (agent, règles, index des savoir-faire : mise en cache, identique
+  pour toutes les fermes) + partie **volatile** (nom de ferme, rôle, date, alias confirmés). Ne jamais
+  y mettre d'identifiant interne, de secret ou d'horodatage dans la partie stable.
+- Ajouter un outil : un `ToolSpec` dans `aiffel/tools/catalog.py` (modèle Pydantic en entrée, `ToolOutput`
+  avec sa source). Les écritures (`access="write"`) sont refusées par la passerelle jusqu'à A5.
+- Schémas des outils Lexicon figés dans `aiffel/connectors/lexicon/tool_schemas.json` (cache de prompt).
+
 ## Conventions
 
 - Code et identifiants en anglais ; docstrings, commentaires et documentation en français.
