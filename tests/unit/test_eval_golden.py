@@ -63,7 +63,7 @@ async def test_scores_a_correct_proposal_without_writing() -> None:
         row = await run_entry(
             _orchestrator(provider), farm, http, ENTRY, today=TODAY, model="claude-opus-5-5"
         )
-    assert row.predicted_intent == "record" and row.proposal == "oui"
+    assert row.predicted_intent == "record" and row.proposal == "1er message"
     assert row.scores == {
         "procedure": "ok",
         "parcel": "ok",
@@ -88,7 +88,36 @@ async def test_question_without_proposal_scores_fields_ko() -> None:
     assert set(row.scores.values()) == {"ko"}
 
 
+async def test_follow_up_completes_an_incomplete_request() -> None:
+    entry = Entry("j'ai semé", "record_intervention", {"PROCEDURE": ("semé",)})
+    farm = build_farm([ENTRY, entry], PROCEDURES)
+    plant, _ = _ids(farm)
+    provider = ScriptedProvider(
+        final("Quelle parcelle, et quand ?"),
+        tool_turn(
+            (
+                "ekylibre_proposer_intervention",
+                {
+                    "procedure_name": "fertilizing",
+                    "started_at": "2026-10-24T09:00:00",
+                    "target_ids": [plant],
+                },
+            )
+        ),
+        final("Proposition prête."),
+    )
+    async with farm.client() as http:
+        row = await run_entry(
+            _orchestrator(provider), farm, http, entry, today=TODAY, model="claude-opus-5-5"
+        )
+    relance = provider.calls[1]["messages"][-1]["content"]
+    assert "Bel Air" in relance and "aujourd'hui" in relance
+    assert row.proposal == "après relance" and row.predicted_intent == "other"
+    assert row.scores["date"] == "ok" and row.scores["procedure"] == "ko"
+
+
 def test_procedure_matching() -> None:
+    assert procedure_matches("retiré", "net_removing", "Retrait de filet")
     assert procedure_matches("traité", "spraying", "Pulvérisation")
     assert procedure_matches("semé", "sowing", "Semis")
     assert not procedure_matches("labour", "spraying", "Pulvérisation")

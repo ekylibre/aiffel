@@ -13,6 +13,11 @@ Score par champ, uniquement quand le corpus attend ce champ :
 - **parcelle**, **intrant** : noms des cibles et des intrants proposés ;
 - **dose** : nombre de la quantité ;
 - **date** : expressions relatives courantes (« ce matin », « hier », « lundi »…).
+
+Le corpus de Duke est fait de messages isolés, souvent incomplets (« labour »). Quand l'agent
+demande ce qui manque au lieu de proposer, une réponse simulée de l'agriculteur lui donne la
+parcelle, la date et la durée (``follow_up``) ; l'intention est jugée sur le premier message, les
+champs sur la dernière proposition.
 """
 
 from __future__ import annotations
@@ -73,7 +78,10 @@ SYNONYMS = {
     "irrig": ("irrig", "arros", "watering"),
     "arros": ("irrig", "arros", "watering"),
     "taill": ("taill", "pruning"),
+    "retir": ("retrait", "removing"),
 }
+ANIMAL_WORDS = ("vache", "troupeau", "animaux", "veau", "brebis", "agneau", "cheptel")
+DEFAULT_PARCEL = "Bel Air"
 WORKER_PRONOUNS = {"j'ai", "je", "j", "on", "nous", "moi"}
 
 
@@ -204,6 +212,13 @@ def build_farm(corpus: list[Entry], procedures: dict[str, dict[str, Any]]) -> Ev
         "Equipment": [{"id": next(next_id), "name": t} for t in unique("TOOL")],
         "Worker": [{"id": next(next_id), "name": w} for w in unique("WORKER", skip=WORKER_PRONOUNS)]
         + [{"id": next(next_id), "name": "Jeanne Chef"}],
+        "Animal": [
+            {"id": next(next_id), "name": name}
+            for name in ("Vaches laitières troupeau 14", "Génisses zone 3", "Brebis lot 2")
+        ],
+        "BuildingDivision": [
+            {"id": next(next_id), "name": name} for name in ("Stabulation", "Bergerie")
+        ],
     }
     return farm
 
@@ -278,6 +293,36 @@ def procedure_matches(span: str, name: str, label: str) -> bool:
     return word[: max(4, len(word) - 2)] in haystack
 
 
+def predicted_intent(calls: list[tuple[str, dict[str, Any], bool]], answer: str) -> str:
+    """Enregistrement : proposition, savoir-faire ou procédures consultés, préparation annoncée."""
+    names = [name for name, _a, _e in calls]
+    if (
+        PROPOSE in names
+        or "ekylibre_procedures" in names
+        or any(n == "load_skill" and RECORD_SKILL in json.dumps(a) for n, a, _e in calls)
+        or re.search(r"\bpr[ée]par", answer, re.IGNORECASE)
+    ):
+        return "record"
+    if any(name.startswith(("ekylibre_", "lexicon_")) for name in names):
+        return "qa"
+    return "other"
+
+
+def follow_up(entry: Entry, today: date) -> tuple[str, bool]:
+    """Réponse simulée de l'agriculteur quand l'agent demande ce qui manque ; date fournie ?"""
+    parts = []
+    if not entry.spans("PARCEL"):
+        if any(word in norm(entry.text) for word in ANIMAL_WORDS):
+            parts.append("Ce sont les vaches laitières du troupeau 14.")
+        else:
+            parts.append(f"C'est sur {DEFAULT_PARCEL}.")
+    with_date = expected_date(entry.text, today) is None
+    if with_date:
+        parts.append("C'était aujourd'hui à 9 h, pendant 1 h.")
+    parts.append("Pour le reste, fais au plus simple et prépare la proposition.")
+    return " ".join(parts), with_date
+
+
 @dataclass
 class Row:
     text: str
@@ -308,16 +353,14 @@ def score(
     calls: list[tuple[str, dict[str, Any], bool]],
     farm: EvalEkylibre,
     today: date,
+    *,
+    first_turn: list[tuple[str, dict[str, Any], bool]] | None = None,
+    first_answer: str = "",
+    followed_up_date: bool = False,
 ) -> tuple[str, dict[str, str], str]:
     names = {p["id"]: p["name"] for group in farm.products.values() for p in group}
     propose_inputs = [args for name, args, _err in calls if name == PROPOSE]
-    loaded_record_skill = any(
-        name == "load_skill" and RECORD_SKILL in json.dumps(args) for name, args, _ in calls
-    )
-    read_data = any(name.startswith(("ekylibre_", "lexicon_")) for name, _a, _e in calls)
-    predicted = (
-        "record" if propose_inputs or loaded_record_skill else ("qa" if read_data else "other")
-    )
+    predicted = predicted_intent(calls if first_turn is None else first_turn, first_answer)
 
     scores = {f: "" for f in FIELDS}
     args = propose_inputs[-1] if propose_inputs else {}
@@ -342,7 +385,10 @@ def score(
             scores["quantity"] = (
                 "ok" if wanted is not None and any(abs(g - wanted) < 1e-6 for g in got) else "ko"
             )
-        if (when := expected_date(entry.text, today)) is not None:
+        when = expected_date(entry.text, today)
+        if when is None and followed_up_date:
+            when = today
+        if when is not None:
             started = args.get("started_at")
             try:
                 day = datetime.fromisoformat(str(started)).date() if started else None
@@ -388,21 +434,41 @@ async def run_entry(
         actions=actions,  # type: ignore[arg-type]
     )
     started = time.monotonic()
+    messages: list[dict[str, Any]] = [{"role": "user", "content": entry.text}]
+    followed_up_date = False
     try:
-        answer, usage = await orchestrator._loop(
-            ctx, [{"role": "user", "content": entry.text}], None
-        )
+        answer, usage = await orchestrator._loop(ctx, messages, None)
+        first_turn, first_answer = list(gateway.calls), answer
+        proposal = "1er message" if ctx.proposals else "non"
+        if not ctx.proposals and entry.group == "record":
+            reply, followed_up_date = follow_up(entry, today)
+            messages += [
+                {"role": "assistant", "content": answer},
+                {"role": "user", "content": reply},
+            ]
+            answer, more = await orchestrator._loop(ctx, messages, None)
+            usage += more
+            if ctx.proposals:
+                proposal = "après relance"
     finally:
         orchestrator.gateway = base
     latency = time.monotonic() - started
-    predicted, scores, procedure = score(entry, gateway.calls, farm, today)
+    predicted, scores, procedure = score(
+        entry,
+        gateway.calls,
+        farm,
+        today,
+        first_turn=first_turn,
+        first_answer=first_answer,
+        followed_up_date=followed_up_date,
+    )
     return Row(
         text=entry.text,
         expected_intent=entry.group,
         predicted_intent=predicted,
         scores=scores,
         procedure=procedure,
-        proposal="oui" if ctx.proposals else "non",
+        proposal=proposal,
         tools=" ".join(name + ("!" if err else "") for name, _a, err in gateway.calls),
         latency_s=round(latency, 2),
         usage=usage,
@@ -425,7 +491,12 @@ def summarize(rows: list[Row]) -> dict[str, Any]:
         )
     records = [r for r in rows if r.expected_intent == "record"]
     if records:
-        summary["propositions"] = sum(r.proposal == "oui" for r in records) / len(records)
+        summary["propositions_1er_message"] = sum(
+            r.proposal == "1er message" for r in records
+        ) / len(records)
+        summary["propositions_après_relance"] = sum(r.proposal != "non" for r in records) / len(
+            records
+        )
     summary["latence_moyenne_s"] = sum(r.latency_s for r in rows) / len(rows)
     summary["coût_usd"] = sum(r.cost_usd for r in rows)
     return summary
