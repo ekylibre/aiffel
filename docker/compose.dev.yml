@@ -1,0 +1,36 @@
+# Environnement de développement local : Postgres pour Aiffel (A1) et l'application.
+#   docker compose -f docker/compose.dev.yml up -d db
+#   uv run uvicorn aiffel.app.main:app --reload
+name: aiffel-dev
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aiffel
+      POSTGRES_USER: aiffel
+      POSTGRES_PASSWORD: aiffel-dev
+    ports:
+      - "127.0.0.1:5442:5432"
+    volumes:
+      - aiffel-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiffel"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      AIFFEL_ENV: dev
+      AIFFEL_DATABASE_URL: postgresql+psycopg://aiffel:aiffel-dev@db:5432/aiffel
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["app"]
+
+volumes:
+  aiffel-db:
