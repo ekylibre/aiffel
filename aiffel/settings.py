@@ -1,0 +1,28 @@
+"""Configuration d'Aiffel, lue depuis l'environnement (préfixe ``AIFFEL_``)."""
+
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="AIFFEL_", env_file=".env", extra="ignore")
+
+    env: Literal["dev", "test", "production"] = "dev"
+    log_level: str = "INFO"
+    public_base_url: str = "http://localhost:8000"
+
+    # Secrets : SecretStr empêche leur affichage dans les logs et les repr.
+    database_url: SecretStr | None = None
+    master_key: SecretStr | None = None
+    hash_salt: SecretStr | None = None
+    telegram_bot_token: SecretStr | None = None
+    telegram_webhook_secret: SecretStr | None = None
+    anthropic_api_key: SecretStr | None = None
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
