@@ -20,9 +20,10 @@ from aiffel.db.session import global_session, make_engine, make_sessionmaker
 from aiffel.farm_context import FarmContextService
 from aiffel.logging import configure_logging
 from aiffel.orchestrator.agent import Orchestrator
-from aiffel.orchestrator.llm import AnthropicProvider
+from aiffel.orchestrator.llm import AnthropicProvider, Effort, LLMProvider
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.pairing import PairingResult, PairingService
+from aiffel.providers.openrouter import OpenRouterProvider
 from aiffel.settings import Settings, get_settings
 from aiffel.tools.catalog import phase1_tools, propose_tools
 from aiffel.tools.registry import ToolGateway
@@ -99,6 +100,31 @@ class Services:
         await self.engine.dispose()
 
 
+def make_provider(
+    settings: Settings, model: str | None = None, effort: Effort | None = None
+) -> LLMProvider | None:
+    """Fournisseur de modèle choisi par la configuration ; ``None`` sans clé d'API."""
+    model = model or settings.llm_model
+    effort = effort or settings.llm_effort
+    if settings.llm_provider == "openrouter":
+        if settings.openrouter_api_key is None:
+            return None
+        return OpenRouterProvider(
+            SecretValue(settings.openrouter_api_key.get_secret_value()),
+            model,
+            effort=effort,
+            max_tokens=settings.llm_max_tokens,
+        )
+    if settings.anthropic_api_key is None:
+        return None
+    return AnthropicProvider(
+        anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value()),
+        model,
+        effort=effort,
+        max_tokens=settings.llm_max_tokens,
+    )
+
+
 def build_services(settings: Settings | None = None) -> Services:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
@@ -116,13 +142,7 @@ def build_services(settings: Settings | None = None) -> Services:
     lexicon = LexiconClient(settings.lexicon_mcp_url)
     actions = ActionService(sessions)
     orchestrator = None
-    if settings.anthropic_api_key and settings.anthropic_api_key.get_secret_value():
-        provider = AnthropicProvider(
-            anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value()),
-            settings.llm_model,
-            effort=settings.llm_effort,
-            max_tokens=settings.llm_max_tokens,
-        )
+    if (provider := make_provider(settings)) is not None:
         orchestrator = Orchestrator(
             sessions,
             farms,

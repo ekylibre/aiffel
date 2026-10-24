@@ -1,7 +1,7 @@
-"""Fournisseurs de modèles de langage (ADR-02) : une interface, Anthropic en phase 1.
+"""Fournisseurs de modèles de langage (ADR-02) : une interface, Anthropic et OpenRouter.
 
-Le format pivot des messages est celui de l'API Messages d'Anthropic ; un autre fournisseur
-(Mistral, Ollama) traduira depuis ce format.
+Le format pivot des messages est celui de l'API Messages d'Anthropic ; les autres fournisseurs
+traduisent depuis ce format (``aiffel/providers/openrouter.py``).
 """
 
 from dataclasses import dataclass, field
@@ -33,6 +33,8 @@ class Usage:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    # Coût facturé quand le fournisseur le donne (OpenRouter), en dollars ; 0 sinon.
+    cost_usd: float = 0.0
 
     def __add__(self, other: "Usage") -> "Usage":
         return Usage(
@@ -40,6 +42,7 @@ class Usage:
             self.output_tokens + other.output_tokens,
             self.cache_read_tokens + other.cache_read_tokens,
             self.cache_write_tokens + other.cache_write_tokens,
+            self.cost_usd + other.cost_usd,
         )
 
 

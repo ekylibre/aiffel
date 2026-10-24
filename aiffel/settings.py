@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     pairing_code_ttl_minutes: int = 15
 
     # Moteur d'agent (A4). Modèle et effort modifiables sans toucher au code (NF-SOB).
+    # Fournisseur : « anthropic » (API directe) ou « openrouter » (Mistral, DeepSeek, Qwen…).
+    llm_provider: Literal["anthropic", "openrouter"] = "anthropic"
     llm_model: str = "claude-opus-5-5"
     llm_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
     llm_max_tokens: int = 16000
@@ -43,6 +45,12 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     telegram_webhook_secret: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
+    openrouter_api_key: SecretStr | None = Field(
+        None,
+        validation_alias=AliasChoices(
+            "AIFFEL_OPENROUTER_API_KEY", "OPENROUTER_API_KEY", "OPEN_ROUTEUR_API_KEY"
+        ),
+    )
 
     @field_validator(
         "database_url",
@@ -52,6 +60,7 @@ class Settings(BaseSettings):
         "telegram_bot_token",
         "telegram_webhook_secret",
         "anthropic_api_key",
+        "openrouter_api_key",
         mode="before",
     )
     @classmethod

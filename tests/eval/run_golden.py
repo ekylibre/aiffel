@@ -2,6 +2,7 @@
 
     uv run python -m tests.eval.run_golden --limit 20
     uv run python -m tests.eval.run_golden --model claude-sonnet-5-5 --effort low
+    uv run python -m tests.eval.run_golden --provider openrouter --model qwen/qwen3.8-flash
 
 Rapport CSV par exécution dans ``tests/eval/reports/`` (modèle, coût, latence, score par champ),
 et résumé affiché à la fin. Aucune écriture dans Ekylibre : voir ``golden.py``.
@@ -17,13 +18,12 @@ import random
 from datetime import date, datetime
 from pathlib import Path
 
-import anthropic
 import structlog
 
+from aiffel.app.container import make_provider
 from aiffel.connectors.lexicon.client import LexiconClient
 from aiffel.logging import configure_logging
 from aiffel.orchestrator.agent import Orchestrator
-from aiffel.orchestrator.llm import AnthropicProvider
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.settings import Settings
 from aiffel.tools.catalog import phase1_tools, propose_tools
@@ -114,32 +114,39 @@ async def main() -> None:
     parser.add_argument("--today", type=date.fromisoformat, default=date.today())
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--no-lexicon", action="store_true")
+    parser.add_argument("--provider", choices=("anthropic", "openrouter"), default=None)
+    parser.add_argument("--budget", type=float, default=5.0, help="plafond de dépense en $")
     args = parser.parse_args()
 
     settings = Settings()
+    if args.provider:
+        settings = settings.model_copy(update={"llm_provider": args.provider})
     configure_logging("WARNING")
-    if settings.anthropic_api_key is None:
-        raise SystemExit("AIFFEL_ANTHROPIC_API_KEY manquant dans .env")
     model = args.model or settings.llm_model
     effort = args.effort or settings.llm_effort
+    if make_provider(settings, model, effort) is None:
+        raise SystemExit(f"Clé d'API manquante pour {settings.llm_provider} dans .env")
 
     corpus = pick(load_corpus(args.corpus), args.limit, args.seed)
     procedures = load_procedures()
     if len(procedures) < 10:
         print("⚠️ fixtures/procedures.json absent : 2 procédures seulement (snapshot_procedures).")
     farm = build_farm(load_corpus(args.corpus), procedures)
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value())
+    spent = 0.0
     lexicon = None if args.no_lexicon else LexiconClient(settings.lexicon_mcp_url)
     runtime = AgentRuntime.load()
     semaphore = asyncio.Semaphore(args.concurrency)
 
-    async def one(entry: Entry, http: object) -> Row:
+    async def one(entry: Entry, http: object) -> Row | None:
+        nonlocal spent
         async with semaphore:
+            if spent >= args.budget:
+                return None  # plafond atteint : les phrases restantes ne sont pas jouées
             # Un orchestrateur par phrase : la passerelle instrumentée lui est propre.
             orchestrator = Orchestrator(
                 None,  # type: ignore[arg-type]  # pas de base : ni historique ni mémoire
                 None,  # type: ignore[arg-type]
-                AnthropicProvider(client, model, effort=effort, max_tokens=settings.llm_max_tokens),
+                make_provider(settings, model, effort),  # type: ignore[arg-type]
                 ToolGateway([*phase1_tools(), *propose_tools()]),
                 runtime,
                 lexicon=lexicon,
@@ -149,17 +156,21 @@ async def main() -> None:
             row = await run_entry(
                 orchestrator, farm, http, entry, today=args.today, model=model, lexicon=lexicon
             )  # type: ignore[arg-type]
+            spent += row.cost_usd
             mark = "✓" if row.predicted_intent == row.expected_intent else "✗"
             print(f"{mark} {row.latency_s:5.1f}s ${row.cost_usd:.3f}  {entry.text[:70]}")
             return row
 
     async with farm.client() as http:
-        rows = await asyncio.gather(*(one(entry, http) for entry in corpus))
+        results = await asyncio.gather(*(one(entry, http) for entry in corpus))
+    rows = [row for row in results if row is not None]
+    if len(rows) < len(corpus):
+        print(f"⚠️ plafond de {args.budget} $ atteint : {len(rows)}/{len(corpus)} phrases jouées")
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = REPORTS / f"{stamp}-{model}-{effort}.csv"
-    write_csv(list(rows), path, model, effort)
-    summary = summarize(list(rows))
+    path = REPORTS / f"{stamp}-{model.replace('/', '_')}-{effort}.csv"
+    write_csv(rows, path, model, effort)
+    summary = summarize(rows)
     print(json.dumps(summary, ensure_ascii=False, indent=1, default=str))
     print(f"Rapport : {path}")
 

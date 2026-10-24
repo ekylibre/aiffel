@@ -357,6 +357,8 @@ class Row:
 
 
 def cost(model: str, usage: Usage) -> float:
+    if usage.cost_usd:  # coût facturé, donné par le fournisseur (OpenRouter)
+        return usage.cost_usd
     price_in, price_out, cache_read, cache_write = PRICES.get(model, (0.0, 0.0, 0.0, 0.0))
     return (
         usage.input_tokens * price_in
