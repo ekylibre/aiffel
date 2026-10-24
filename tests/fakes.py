@@ -73,7 +73,14 @@ class FakeEkylibre:
     products: dict[str, list[dict[str, Any]]] = field(
         default_factory=lambda: {
             "LandParcel": [{"id": 10, "name": "Grands Champs (sol)"}],
-            "Plant": [{"id": 11, "name": "Maïs Grands Champs 2026"}],
+            "Plant": [
+                {
+                    "id": 11,
+                    "name": "Maïs Grands Champs 2026",
+                    "shape_geojson": {"type": "MultiPolygon"},
+                    "shape_svg": "<path/>",
+                }
+            ],
             "Matter": [
                 {"id": 20, "name": "ELUMIS"},
                 {"id": 21, "name": "Ammonitrate 33,5"},

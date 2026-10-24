@@ -78,7 +78,12 @@ class EkylibreClient:
         self, product_type: str | None = None, **params: Any
     ) -> list[dict[str, Any]]:
         path = f"products/{product_type}" if product_type else "products"
-        return list(await self.get(path, params))
+        # Les plantes et parcelles portent leur contour (GeoJSON et SVG) : des dizaines de milliers
+        # de jetons par appel, sans utilité pour la conversation.
+        return [
+            {k: v for k, v in p.items() if not k.startswith("shape")}
+            for p in await self.get(path, params) or []
+        ]
 
     async def procedures(self) -> list[dict[str, Any]]:
         return list(await self.get("procedures"))
