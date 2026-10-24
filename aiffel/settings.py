@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     env: Literal["dev", "test", "production"] = "dev"
     log_level: str = "INFO"
     public_base_url: str = "http://localhost:8000"
+    # Domaines Ekylibre acceptés pour le raccordement (sous-domaine = tenant de la ferme).
+    ekylibre_allowed_domains: tuple[str, ...] = ("ekylibre-dev.com", "ekylibre.com")
+    pairing_code_ttl_minutes: int = 15
 
     # Secrets : SecretStr empêche leur affichage dans les logs et les repr.
     # Connexion applicative (rôle aiffel_app, soumis à la RLS).

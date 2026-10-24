@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>{% block title %}Aiffel{% endblock %}</title>
+  <style>
+    :root { --bg: #f6f4ee; --card: #ffffff; --ink: #1f2a1c; --muted: #5b6656; --accent: #3d6b35; --error: #a33a2b; --line: #d9d6cc; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #151a14; --card: #1f261d; --ink: #e9ede6; --muted: #a7b2a2; --accent: #8cc27f; --error: #f08a7a; --line: #34402f; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+    main { max-width: 440px; margin: 0 auto; padding: 32px 16px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; }
+    h1 { font-size: 1.35rem; margin: 0 0 8px; }
+    p { color: var(--muted); margin: 0 0 16px; }
+    label { display: block; font-weight: 600; margin: 16px 0 6px; }
+    input { width: 100%; padding: 12px; font-size: 1rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
+    small { color: var(--muted); }
+    button { margin-top: 24px; width: 100%; padding: 14px; font-size: 1rem; font-weight: 600; border: 0; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; }
+    .error { color: var(--error); font-weight: 600; }
+    .brand { font-weight: 700; letter-spacing: .02em; color: var(--accent); margin-bottom: 16px; }
+  </style>
+</head>
+<body><main><div class="brand">🌾 Aiffel</div><div class="card">{% block content %}{% endblock %}</div></main></body>
+</html>

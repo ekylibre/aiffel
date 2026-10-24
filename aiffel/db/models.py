@@ -132,6 +132,8 @@ class PairingCode(Base):
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Échecs de connexion avec ce code ; au-delà de PAIRING_MAX_ATTEMPTS, le code est inutilisable.
+    attempts: Mapped[int] = mapped_column(Integer, server_default="0")
 
 
 class Connection(Base):
@@ -148,6 +150,8 @@ class Connection(Base):
     connector: Mapped[str] = mapped_column(String(50))
     base_url: Mapped[str] = mapped_column(String(500))
     tenant: Mapped[str | None] = mapped_column(String(100))
+    # Identifiant du compte chez le logiciel (id utilisateur Ekylibre) : reconnaît une reconnexion.
+    external_account_id: Mapped[str | None] = mapped_column(String(100))
     scopes: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
     status: Mapped[str] = mapped_column(String(20), server_default="active")
     created_at: Mapped[datetime] = _created_at()

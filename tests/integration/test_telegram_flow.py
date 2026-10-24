@@ -158,8 +158,8 @@ async def test_paired_user_reaches_the_assistant(
 
     seen: list[Any] = []
 
-    async def on_paired(uid: Any, message: Any) -> list[Any]:
-        seen.append((uid, message.text))
+    async def on_paired(caller: Any, message: Any) -> list[Any]:
+        seen.append((caller.user_id, message.text))
         return []
 
     fake = FakeTelegram()
