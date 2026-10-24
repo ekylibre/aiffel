@@ -456,8 +456,10 @@ async def run_entry(
     started = time.monotonic()
     messages: list[dict[str, Any]] = [{"role": "user", "content": entry.text}]
     followed_up_date = False
+    provider = orchestrator.provider
+    assert provider is not None
     try:
-        answer, usage = await orchestrator._loop(ctx, messages, None)
+        answer, usage = await orchestrator._loop(provider, ctx, messages, None)
         first_turn, first_answer = list(gateway.calls), answer
         proposal = "1er message" if ctx.proposals else "non"
         if not ctx.proposals and entry.group == "record":
@@ -466,7 +468,7 @@ async def run_entry(
                 {"role": "assistant", "content": answer},
                 {"role": "user", "content": reply},
             ]
-            answer, more = await orchestrator._loop(ctx, messages, None)
+            answer, more = await orchestrator._loop(provider, ctx, messages, None)
             usage += more
             if ctx.proposals:
                 proposal = "après relance"

@@ -10,7 +10,8 @@ import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any, Protocol
 
 import structlog
 from sqlalchemy import select
@@ -24,6 +25,9 @@ from aiffel.db.models import Conversation, FarmMemory, Message, UsageMetric
 from aiffel.db.session import farm_session
 from aiffel.farm_context import FarmContextService, FarmRef
 from aiffel.orchestrator.llm import LLMError, LLMProvider, SystemPrompt, Usage
+
+if TYPE_CHECKING:
+    from aiffel.farm_llm import ResolvedLLM
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.tools.catalog import RECONNECT_REASON
 from aiffel.tools.registry import LexiconLike, ToolAbort, ToolContext, ToolGateway
@@ -47,19 +51,30 @@ TOO_LONG = (
 VOICE_LATER = "Les messages vocaux arrivent bientôt. En attendant, écrivez-moi votre demande."
 TRANSCRIBED_NOTE = "[Message vocal transcrit automatiquement : des mots peuvent être mal reconnus]"
 PHOTO_LATER = "Je ne sais pas encore analyser les photos. Décrivez-moi ce que vous voyez."
+NO_MODEL = (
+    "Aucun modèle d'IA n'est disponible pour votre ferme. L'exploitant peut en choisir un et "
+    "ajouter sa clé avec /modele."
+)
+
+
+class LLMResolver(Protocol):
+    """Choisit le fournisseur de modèle d'une ferme (voir :mod:`aiffel.farm_llm`)."""
+
+    async def resolve(self, farm_id: uuid.UUID) -> "ResolvedLLM | None": ...
 
 
 @dataclass
 class Orchestrator:
     sessions: async_sessionmaker[AsyncSession]
     farms: FarmContextService
-    provider: LLMProvider
+    provider: LLMProvider | None  # modèle par défaut ; ``llm`` le remplace ferme par ferme
     gateway: ToolGateway
     runtime: AgentRuntime
     lexicon: LexiconLike | None = None
     max_iterations: int = 8
     model_label: str = "llm"
     actions: ActionService | None = None
+    llm: LLMResolver | None = None
 
     async def run_turn(
         self, caller: Caller, farm: FarmRef, message: InboundMessage
@@ -73,6 +88,13 @@ class Orchestrator:
         text = (message.text or "").strip()
         if not text:
             return [OutboundMessage(text="Écrivez-moi votre question. /aide")]
+
+        provider, label = self.provider, self.model_label
+        if self.llm is not None:
+            resolved = await self.llm.resolve(farm.farm_id)
+            provider, label = (resolved.provider, resolved.label) if resolved else (None, label)
+        if provider is None:
+            return [OutboundMessage(text=NO_MODEL)]
 
         access = await self.farms.ekylibre(farm, caller.user_id)
         if access is not None and access.client is None:
@@ -102,7 +124,7 @@ class Orchestrator:
         messages: list[dict[str, Any]] = [*history, {"role": "user", "content": content}]
 
         try:
-            answer, usage = await self._loop(ctx, messages, open_proposal)
+            answer, usage = await self._loop(provider, ctx, messages, open_proposal)
         except ToolAbort as abort:
             if abort.reason == RECONNECT_REASON and access is not None:
                 await self.farms.mark_needs_reconnect(farm, access.connection_id, caller.user_id)
@@ -112,7 +134,7 @@ class Orchestrator:
             log.warning("agent.llm_error", error=str(exc))
             return [OutboundMessage(text=UNAVAILABLE)]
 
-        await self._record(farm.farm_id, conversation_id, text, answer, usage)
+        await self._record(farm.farm_id, conversation_id, text, answer, usage, label)
         replies = [OutboundMessage(text=answer)]
         if ctx.proposals:
             # Récapitulatif produit par le code à partir de la charge utile réelle : c'est lui que
@@ -142,7 +164,11 @@ class Orchestrator:
         return replies
 
     async def _loop(
-        self, ctx: ToolContext, messages: list[dict[str, Any]], open_proposal: str | None = None
+        self,
+        provider: LLMProvider,
+        ctx: ToolContext,
+        messages: list[dict[str, Any]],
+        open_proposal: str | None = None,
     ) -> tuple[str, Usage]:
         volatile = self._volatile(ctx)
         if open_proposal:
@@ -154,7 +180,7 @@ class Orchestrator:
         tools = self.gateway.definitions(ctx)
         usage = Usage()
         for _ in range(self.max_iterations):
-            result = await self.provider.complete(system, messages, tools)
+            result = await provider.complete(system, messages, tools)
             usage += result.usage
             if result.refused:
                 log.info("agent.refusal")
@@ -250,6 +276,7 @@ class Orchestrator:
         question: str,
         answer: str,
         usage: Usage,
+        model: str,
     ) -> None:
         """Hook on_turn_end : historique du tour et consommation (NF-SOB)."""
         now = datetime.now(UTC)
@@ -280,9 +307,10 @@ class Orchestrator:
             stmt = insert(UsageMetric).values(
                 farm_id=farm_id,
                 day=now.date(),
-                model=self.model_label,
+                model=model[:100],
                 tokens_in=usage.input_tokens + usage.cache_read_tokens + usage.cache_write_tokens,
                 tokens_out=usage.output_tokens,
+                cost_usd=Decimal(str(round(usage.cost_usd, 6))),
             )
             await session.execute(
                 stmt.on_conflict_do_update(
@@ -290,6 +318,7 @@ class Orchestrator:
                     set_={
                         "tokens_in": UsageMetric.tokens_in + stmt.excluded.tokens_in,
                         "tokens_out": UsageMetric.tokens_out + stmt.excluded.tokens_out,
+                        "cost_usd": UsageMetric.cost_usd + stmt.excluded.cost_usd,
                     },
                 )
             )

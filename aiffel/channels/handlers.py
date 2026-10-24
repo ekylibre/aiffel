@@ -8,12 +8,15 @@ from aiffel.channels.base import Button, InboundKind, InboundMessage, OutboundMe
 from aiffel.channels.dispatcher import UNSUPPORTED, WELCOME, Caller
 from aiffel.connectors.ekylibre.client import EkylibreError, EkylibreUnauthorized
 from aiffel.farm_context import FarmContextService, FarmRef
-from aiffel.pairing import PairingService
+from aiffel.farm_llm import FarmLLMService, LLMKeyError
+from aiffel.pairing import PURPOSE_LLM_KEY, PairingService
+from aiffel.providers.catalog import CHOICES, PROVIDERS, ProviderName
 from aiffel.voice import VoiceService
 
 HELP = (
     "Voici ce que je sais faire pour l'instant :\n"
     "• /ferme : votre ferme et ses parcelles\n"
+    "• /modele : le modèle d'IA de la ferme (et votre propre clé)\n"
     "• /start : relier ou reconnecter votre compte Ekylibre\n"
     "• /aide : ce message\n\n"
     "Bientôt : enregistrer une intervention en me la dictant, et répondre à vos questions."
@@ -25,6 +28,8 @@ RECONNECT = (
 )
 UNAVAILABLE = "Ekylibre ne répond pas pour le moment. Réessayez dans quelques minutes."
 MAX_LISTED_ZONES = 30
+LLM_CALLBACK = "llm"
+OWNER_ONLY = "Seul l'exploitant de la ferme peut changer le modèle d'IA."
 
 Assistant = Callable[[Caller, FarmRef, InboundMessage], Awaitable[list[OutboundMessage]]]
 
@@ -45,6 +50,7 @@ class Handlers:
     assistant: Assistant = placeholder_assistant
     actions: ActionService | None = None
     voice: VoiceService | None = None
+    llm: FarmLLMService | None = None
 
     async def invite(self, caller: Caller, intro: str) -> list[OutboundMessage]:
         code = await self.pairing.create_code(caller.identity_id)
@@ -86,6 +92,8 @@ class Handlers:
                 return [OutboundMessage(text=HELP)]
             if message.command == "ferme":
                 return await self._farm_summary(caller, farm)
+            if message.command in ("modele", "modèle", "model") and self.llm is not None:
+                return await self._llm_menu(self.llm, farm)
         if message.kind is InboundKind.VOICE and self.voice is not None and message.file_id:
             return await self._voice(self.voice, caller, farm, message)
         return await self.assistant(caller, farm, message)
@@ -131,6 +139,8 @@ class Handlers:
     async def _callback(
         self, caller: Caller, farm: FarmRef, message: InboundMessage
     ) -> list[OutboundMessage]:
+        if (message.callback_data or "").startswith(f"{LLM_CALLBACK}:") and self.llm is not None:
+            return await self._llm_callback(self.llm, caller, farm, message.callback_data or "")
         parsed = parse_callback(message.callback_data)
         if parsed is None or self.actions is None or caller.user_id is None:
             return [OutboundMessage(text="Ce bouton n'est plus valable.")]
@@ -161,3 +171,85 @@ class Handlers:
                 )
             ]
         return [OutboundMessage(text=outcome.text)]
+
+    async def _llm_menu(self, llm: FarmLLMService, farm: FarmRef) -> list[OutboundMessage]:
+        """Modèle actuel et choix possibles ; boutons réservés à l'exploitant."""
+        setting = await llm.current(farm.farm_id)
+        if setting.choice is None:
+            current = "le modèle par défaut d'Aiffel"
+        else:
+            whose = (
+                "clé de la ferme" if setting.choice.provider in setting.own_keys else "clé Aiffel"
+            )
+            current = f"{setting.choice.label} ({PROVIDERS[setting.choice.provider]}, {whose})"
+        lines = [f"🤖 Modèle d'IA de la ferme : {current}.", "", "Modèles validés pour Aiffel :"]
+        for choice in CHOICES:
+            missing = "" if llm.usable(choice, setting) else " — clé requise"
+            lines.append(
+                f"• {choice.label} ({PROVIDERS[choice.provider]}) : {choice.note}{missing}"
+            )
+        if farm.role != "owner":
+            return [OutboundMessage(text="\n".join([*lines, "", OWNER_ONLY]))]
+        lines += [
+            "",
+            "Avec votre propre clé OpenRouter ou Anthropic, la consommation vous est facturée "
+            "directement par le fournisseur.",
+        ]
+        buttons = [
+            [
+                Button(
+                    label=("✅ " if choice == setting.choice else "") + choice.label,
+                    data=f"{LLM_CALLBACK}:m:{choice.key}",
+                )
+            ]
+            for choice in CHOICES
+        ]
+        buttons.append([Button(label="🔑 Ajouter ma clé", data=f"{LLM_CALLBACK}:k")])
+        buttons += [
+            [Button(label=f"Retirer ma clé {PROVIDERS[p]}", data=f"{LLM_CALLBACK}:rm:{p}")]
+            for p in sorted(setting.own_keys)
+        ]
+        return [OutboundMessage(text="\n".join(lines), buttons=buttons)]
+
+    async def _llm_callback(
+        self, llm: FarmLLMService, caller: Caller, farm: FarmRef, data: str
+    ) -> list[OutboundMessage]:
+        if caller.user_id is None:
+            return [OutboundMessage(text=NO_FARM)]
+        if farm.role != "owner":
+            return [OutboundMessage(text=OWNER_ONLY)]
+        parts = data.split(":")
+        if parts[1:2] == ["k"]:
+            return await self._key_link(caller)
+        if len(parts) == 3 and parts[1] == "rm" and parts[2] in PROVIDERS:
+            provider: ProviderName = parts[2]
+            removed = await llm.remove_key(farm.farm_id, caller.user_id, provider)
+            text = f"Clé {PROVIDERS[provider]} retirée." if removed else "Aucune clé à retirer."
+            return [OutboundMessage(text=text)]
+        if len(parts) == 3 and parts[1] == "m":
+            try:
+                choice = await llm.choose(farm.farm_id, caller.user_id, parts[2])
+            except LLMKeyError as exc:
+                return [OutboundMessage(text=str(exc))]
+            if not llm.usable(choice, await llm.current(farm.farm_id)):
+                return [
+                    OutboundMessage(
+                        text=f"{choice.label} choisi, mais il faut une clé "
+                        f"{PROVIDERS[choice.provider]} : d'ici là, j'utilise le modèle par défaut."
+                    ),
+                    *await self._key_link(caller),
+                ]
+            return [OutboundMessage(text=f"C'est noté : j'utilise désormais {choice.label}.")]
+        return [OutboundMessage(text="Ce bouton n'est plus valable.")]
+
+    async def _key_link(self, caller: Caller) -> list[OutboundMessage]:
+        code = await self.pairing.create_code(caller.identity_id, PURPOSE_LLM_KEY)
+        url = f"{self.public_base_url.rstrip('/')}/cle?c={code}"
+        minutes = int(self.pairing.ttl.total_seconds() // 60)
+        text = (
+            "Pour votre sécurité, la clé se saisit sur une page web, jamais dans la conversation. "
+            f"Ouvrez ce lien (valable {minutes} minutes, une seule fois)."
+        )
+        if url.startswith("https://"):
+            return [OutboundMessage(text=text, buttons=[[Button(label="Ajouter ma clé", url=url)]])]
+        return [OutboundMessage(text=f"{text}\n{url}")]

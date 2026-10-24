@@ -141,3 +141,21 @@ async def test_rate_limit_is_retried_then_reported() -> None:
 
     with pytest.raises(LLMError, match="limite de débit"):
         await _provider(always).complete(SYSTEM, HISTORY, TOOLS)
+
+
+async def test_key_check_hides_the_key_and_tells_refused_from_unreachable() -> None:
+    from aiffel.providers.keys import KeyCheckError, verify_key
+
+    def answer(status: int) -> httpx.AsyncClient:
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.headers["authorization"] == "Bearer sk-or-SECRET"
+            return httpx.Response(status, json={"data": {}})
+
+        return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    key = SecretValue("sk-or-SECRET")
+    assert await verify_key("openrouter", key, answer(200))
+    assert not await verify_key("openrouter", key, answer(401))
+    with pytest.raises(KeyCheckError) as excinfo:
+        await verify_key("openrouter", key, answer(503))
+    assert "SECRET" not in str(excinfo.value)

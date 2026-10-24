@@ -6,6 +6,7 @@ rôle applicatif ne voit que les lignes de la ferme fixée par ``aiffel.farm_id`
 
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -18,6 +19,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     MetaData,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -134,6 +136,8 @@ class PairingCode(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Échecs de connexion avec ce code ; au-delà de PAIRING_MAX_ATTEMPTS, le code est inutilisable.
     attempts: Mapped[int] = mapped_column(Integer, server_default="0")
+    # « pair » (appairage) ou « llm_key » (clé d'IA de la ferme) : un code n'ouvre que sa page.
+    purpose: Mapped[str] = mapped_column(String(20), server_default="pair")
 
 
 class Connection(Base):
@@ -306,6 +310,8 @@ class UsageMetric(Base):
     tokens_in: Mapped[int] = mapped_column(BigInteger, server_default="0")
     tokens_out: Mapped[int] = mapped_column(BigInteger, server_default="0")
     stt_seconds: Mapped[int] = mapped_column(Integer, server_default="0")
+    # Coût facturé par le fournisseur quand il le renvoie (OpenRouter) ; 0 sinon.
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), server_default="0")
 
 
 INBOUND_JOB_STATUSES = ("pending", "processing", "done", "failed")
