@@ -58,6 +58,9 @@ class ToolContext:
     lexicon: LexiconLike | None = None
     aliases: dict[str, str] = field(default_factory=dict)
     skills: dict[str, str] = field(default_factory=dict)
+    # Service des propositions (A5) et propositions créées pendant le tour.
+    actions: Any | None = None
+    proposals: list[Any] = field(default_factory=list)
 
     def has(self, requirement: Requirement | None) -> bool:
         if requirement == "ekylibre":
@@ -85,7 +88,8 @@ class ToolSpec:
     input_model: type[BaseModel] | None = None
     # Schéma JSON fourni tel quel (outils MCP) quand il n'y a pas de modèle Pydantic.
     input_schema: dict[str, Any] | None = None
-    access: Literal["read", "write"] = "read"
+    # « propose » : crée une proposition locale à valider ; « write » : toujours refusé ici.
+    access: Literal["read", "propose", "write"] = "read"
     roles: frozenset[str] = frozenset({"owner", "worker"})
     requires: Requirement | None = None
 
@@ -142,7 +146,7 @@ class ToolGateway:
             log.warning("tool.denied", tool=name)
             return ToolResult(f"Outil « {name} » indisponible.", is_error=True)
         if spec.access == "write":
-            # Phase A4 : aucune écriture. A5 passera par une PendingAction validée hors modèle.
+            # L'agent n'écrit jamais : il propose (PendingAction), l'utilisateur valide (ADR-04).
             return ToolResult("Écriture non autorisée par cet outil.", is_error=True)
 
         args: Any = raw_input

@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 
+from aiffel.actions.checks import Check, basic_checks, blocking, is_phyto, phyto_checks
+from aiffel.actions.mapping import DoseUnit, Draft, DraftInput, MappingError, slot, to_payload
 from aiffel.connectors.ekylibre.client import EkylibreError, EkylibreUnauthorized
 from aiffel.connectors.lexicon.client import LexiconError
 from aiffel.tools.registry import ToolAbort, ToolContext, ToolFailure, ToolOutput, ToolSpec
@@ -332,4 +335,162 @@ def phase1_tools() -> list[ToolSpec]:
         ToolSpec(
             "load_skill", "Charge les instructions d'un savoir-faire.", _load_skill, SkillInput
         ),
+    ]
+
+
+# --- Proposition d'intervention (A5) : jamais d'écriture directe ---
+
+PARIS = ZoneInfo("Europe/Paris")
+PRODUCT_TYPES = ("LandParcel", "Plant", "Matter", "Equipment", "Worker")
+
+
+class ProposedInput(BaseModel):
+    product_id: int = Field(..., description="Identifiant Ekylibre de l'intrant (type Matter)")
+    quantity: float = Field(..., gt=0)
+    unit: DoseUnit = Field(..., description="Dose par hectare (l/ha, kg/ha…) ou quantité totale")
+
+
+class ProposeInterventionInput(BaseModel):
+    procedure_name: str = Field(
+        ..., description="Nom Ekylibre de la procédure (ekylibre_procedures)"
+    )
+    started_at: datetime = Field(
+        ..., description="Début, ISO 8601 ; heure de Paris si pas de fuseau"
+    )
+    duration_minutes: int = Field(60, ge=1, le=24 * 60)
+    target_ids: list[int] = Field(
+        ..., min_length=1, max_length=50, description="Produits cibles (target_product_ids)"
+    )
+    inputs: list[ProposedInput] = Field(default_factory=list, max_length=20)
+    tool_ids: list[int] = Field(default_factory=list, max_length=20)
+    doer_ids: list[int] = Field(default_factory=list, max_length=20)
+    crop_ephy: str | None = Field(
+        None, description="Culture traitée, libellé E-Phy (« Blé », « Maïs »…)"
+    )
+    description: str | None = Field(None, max_length=500)
+
+
+def _fmt_qty(value: float) -> str:
+    return f"{value:g}".replace(".", ",")
+
+
+def _summary(
+    procedure: dict[str, Any],
+    draft: Draft,
+    products: dict[int, dict[str, Any]],
+    checks: list[Check],
+) -> str:
+    def names(ids: tuple[int, ...]) -> str:
+        return ", ".join(str(products[i].get("name") or i) for i in ids)
+
+    start = draft.started_at.astimezone(PARIS)
+    hours, minutes = divmod(int(draft.duration.total_seconds() // 60), 60)
+    duration = (
+        f"{hours} h {minutes:02d}"
+        if hours and minutes
+        else (f"{hours} h" if hours else f"{minutes} min")
+    )
+    lines = [
+        "📝 Intervention à valider",
+        f"• {procedure.get('human_name') or draft.procedure_name}",
+        f"• Le {start:%d/%m/%Y} à {start:%H:%M}, durée {duration}",
+        f"• Cibles : {names(draft.target_ids)}",
+    ]
+    for item in draft.inputs:
+        lines.append(
+            f"• Intrant : {products[item.product_id].get('name')} — "
+            f"{_fmt_qty(item.quantity)} {item.unit}"
+        )
+    if draft.tool_ids:
+        lines.append(f"• Matériel : {names(draft.tool_ids)}")
+    if draft.doer_ids:
+        lines.append(f"• Intervenants : {names(draft.doer_ids)}")
+    icons = {"block": "⛔", "warn": "⚠️", "info": "✅"}
+    if checks:
+        lines.append("")
+        lines += [f"{icons[c.level]} {c.message}" for c in checks]
+    return "\n".join(lines)
+
+
+async def _propose_intervention(ctx: ToolContext, args: ProposeInterventionInput) -> ToolOutput:
+    if ctx.actions is None:
+        raise ToolFailure("L'enregistrement d'interventions n'est pas activé.")
+    procedure = await _ekylibre(ctx, "procedure", args.procedure_name)
+    products: dict[int, dict[str, Any]] = {}
+    for product_type in PRODUCT_TYPES:
+        for product in await _ekylibre(ctx, "products", product_type):
+            if isinstance(product.get("id"), int):
+                products[product["id"]] = {**product, "type": product_type}
+
+    started = args.started_at if args.started_at.tzinfo else args.started_at.replace(tzinfo=PARIS)
+    draft = Draft(
+        procedure_name=args.procedure_name,
+        started_at=started,
+        duration=timedelta(minutes=args.duration_minutes),
+        target_ids=tuple(args.target_ids),
+        inputs=tuple(DraftInput(i.product_id, i.quantity, i.unit) for i in args.inputs),
+        tool_ids=tuple(args.tool_ids),
+        doer_ids=tuple(args.doer_ids),
+        description=args.description,
+    )
+    checks = basic_checks(draft, products, datetime.now(UTC))
+    if not blocking(checks):
+        try:
+            payload = to_payload(draft, procedure)
+        except MappingError as exc:
+            raise ToolFailure(str(exc)) from None
+        input_slot = slot(procedure, "input")
+        if is_phyto(input_slot.get("name") if input_slot else None, args.procedure_name):
+            lexicon = ctx.lexicon
+            search = None
+            if lexicon is not None:
+
+                async def search(params: dict[str, Any]) -> Any:
+                    return await lexicon.call("search_phytosanitary_products", params)
+
+            for item in draft.inputs:
+                checks += await phyto_checks(
+                    str(products[item.product_id].get("name")),
+                    item.quantity,
+                    item.unit,
+                    args.crop_ephy,
+                    search,
+                )
+    if blocking(checks):
+        # Pas de proposition : le modèle explique et corrige avec l'utilisateur.
+        raise ToolFailure("Proposition refusée : " + " ".join(c.message for c in blocking(checks)))
+
+    summary = _summary(procedure, draft, products, checks)
+    proposal = await ctx.actions.propose(
+        ctx.farm_id,
+        ctx.user_id,
+        connector="ekylibre",
+        kind="intervention",
+        payload=payload,
+        summary=summary,
+        checks=[c.as_dict() for c in checks],
+    )
+    ctx.proposals.append(proposal)
+    return ToolOutput(
+        {
+            "statut": "proposition créée, en attente de validation par l'utilisateur "
+            "(rien n'est encore enregistré)",
+            "récapitulatif affiché à l'utilisateur": summary,
+        },
+        "Aiffel (proposition)",
+    )
+
+
+def propose_tools() -> list[ToolSpec]:
+    return [
+        ToolSpec(
+            "ekylibre_proposer_intervention",
+            "Prépare une intervention à enregistrer dans Ekylibre. N'enregistre rien : "
+            "l'utilisateur "
+            "reçoit un récapitulatif avec les boutons Valider / Corriger / Annuler.",
+            _propose_intervention,
+            ProposeInterventionInput,
+            access="propose",
+            requires="ekylibre",
+        )
     ]

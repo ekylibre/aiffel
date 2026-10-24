@@ -17,7 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from aiffel.channels.base import InboundKind, InboundMessage, OutboundMessage
+from aiffel.actions.service import ActionService, callback_data
+from aiffel.channels.base import Button, InboundKind, InboundMessage, OutboundMessage
 from aiffel.channels.dispatcher import Caller
 from aiffel.db.models import Conversation, FarmMemory, Message, UsageMetric
 from aiffel.db.session import farm_session
@@ -57,6 +58,7 @@ class Orchestrator:
     lexicon: LexiconLike | None = None
     max_iterations: int = 8
     model_label: str = "llm"
+    actions: ActionService | None = None
 
     async def run_turn(
         self, caller: Caller, farm: FarmRef, message: InboundMessage
@@ -85,6 +87,12 @@ class Orchestrator:
             lexicon=self.lexicon,
             aliases=await self._aliases(farm.farm_id),
             skills={name: doc.body for name, doc in self.runtime.skills.items()},
+            actions=self.actions,
+        )
+        open_proposal = (
+            await self.actions.open_proposal(farm.farm_id, caller.user_id, "intervention")
+            if self.actions
+            else None
         )
         conversation_id, history = await self._history(
             farm.farm_id, caller.user_id, message.channel
@@ -92,7 +100,7 @@ class Orchestrator:
         messages: list[dict[str, Any]] = [*history, {"role": "user", "content": text}]
 
         try:
-            answer, usage = await self._loop(ctx, messages)
+            answer, usage = await self._loop(ctx, messages, open_proposal)
         except ToolAbort as abort:
             if abort.reason == RECONNECT_REASON and access is not None:
                 await self.farms.mark_needs_reconnect(farm, access.connection_id, caller.user_id)
@@ -103,10 +111,44 @@ class Orchestrator:
             return [OutboundMessage(text=UNAVAILABLE)]
 
         await self._record(farm.farm_id, conversation_id, text, answer, usage)
-        return [OutboundMessage(text=answer)]
+        replies = [OutboundMessage(text=answer)]
+        if ctx.proposals:
+            # Récapitulatif produit par le code à partir de la charge utile réelle : c'est lui que
+            # l'utilisateur valide, pas la reformulation du modèle.
+            proposal = ctx.proposals[-1]
+            replies.append(
+                OutboundMessage(
+                    text=f"{proposal.summary}\n\nValidez pour enregistrer dans Ekylibre.",
+                    buttons=[
+                        [
+                            Button(
+                                label="✅ Valider",
+                                data=callback_data("v", proposal.id, proposal.digest),
+                            ),
+                            Button(
+                                label="✏️ Corriger",
+                                data=callback_data("c", proposal.id, proposal.digest),
+                            ),
+                            Button(
+                                label="✖️ Annuler",
+                                data=callback_data("x", proposal.id, proposal.digest),
+                            ),
+                        ]
+                    ],
+                )
+            )
+        return replies
 
-    async def _loop(self, ctx: ToolContext, messages: list[dict[str, Any]]) -> tuple[str, Usage]:
-        system = SystemPrompt(stable=self.runtime.stable_prompt(), volatile=self._volatile(ctx))
+    async def _loop(
+        self, ctx: ToolContext, messages: list[dict[str, Any]], open_proposal: str | None = None
+    ) -> tuple[str, Usage]:
+        volatile = self._volatile(ctx)
+        if open_proposal:
+            volatile += (
+                "\n- Proposition en attente de validation "
+                "(une nouvelle proposition la remplacera) :\n" + open_proposal
+            )
+        system = SystemPrompt(stable=self.runtime.stable_prompt(), volatile=volatile)
         tools = self.gateway.definitions(ctx)
         usage = Usage()
         for _ in range(self.max_iterations):

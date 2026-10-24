@@ -72,6 +72,10 @@ docker build -f docker/Dockerfile -t aiffel .  # image
 - Ajouter un outil : un `ToolSpec` dans `aiffel/tools/catalog.py` (modèle Pydantic en entrée, `ToolOutput`
   avec sa source). Les écritures (`access="write"`) sont refusées par la passerelle jusqu'à A5.
 - Schémas des outils Lexicon figés dans `aiffel/connectors/lexicon/tool_schemas.json` (cache de prompt).
+- Écritures (A5) : l'outil `ekylibre_proposer_intervention` (`access="propose"`) crée une `PendingAction`
+  via `aiffel/actions/service.py` ; le récapitulatif affiché est **généré par le code**. Seul le
+  callback du bouton Valider (`aiffel/channels/handlers.py`) appelle `create_intervention`, ce que
+  vérifie `tests/integration/test_validated_writes.py::test_no_code_path_from_the_agent_to_an_ekylibre_write`.
 
 ## Conventions
 
