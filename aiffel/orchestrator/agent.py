@@ -1,0 +1,257 @@
+"""Orchestrateur : un tour de conversation avec l'assistant de ferme (A4, ADR-02/03).
+
+Boucle : modèle → outils (via la passerelle) → modèle, jusqu'à une réponse finale, avec un
+plafond d'itérations et de tokens. Le contenu de l'assistant est renvoyé tel quel d'une
+itération à l'autre (historique en ajout seul) ; entre deux tours, seuls les textes échangés
+sont conservés (``messages``), sur une fenêtre courte.
+"""
+
+import asyncio
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
+
+import structlog
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from aiffel.channels.base import InboundKind, InboundMessage, OutboundMessage
+from aiffel.channels.dispatcher import Caller
+from aiffel.db.models import Conversation, FarmMemory, Message, UsageMetric
+from aiffel.db.session import farm_session
+from aiffel.farm_context import FarmContextService, FarmRef
+from aiffel.orchestrator.llm import LLMError, LLMProvider, SystemPrompt, Usage
+from aiffel.orchestrator.runtime import AgentRuntime
+from aiffel.tools.catalog import RECONNECT_REASON
+from aiffel.tools.registry import LexiconLike, ToolAbort, ToolContext, ToolGateway
+
+log = structlog.get_logger()
+
+HISTORY_MESSAGES = 10
+HISTORY_WINDOW = timedelta(hours=12)
+MAX_TURN_TOKENS = 400_000
+
+RECONNECT = (
+    "Ekylibre a refusé l'accès (déconnexion depuis un autre appareil ou mot de passe changé). "
+    "Envoyez /start pour vous reconnecter."
+)
+UNAVAILABLE = "Je ne peux pas répondre pour le moment (service indisponible). Réessayez plus tard."
+REFUSED = "Je ne peux pas traiter cette demande. Reformulez-la, ou envoyez /aide."
+TOO_LONG = (
+    "Je n'ai pas réussi à aller au bout de cette demande. Pouvez-vous la préciser "
+    "(parcelle, campagne, produit) ?"
+)
+VOICE_LATER = "Les messages vocaux arrivent bientôt. En attendant, écrivez-moi votre demande."
+PHOTO_LATER = "Je ne sais pas encore analyser les photos. Décrivez-moi ce que vous voyez."
+
+
+@dataclass
+class Orchestrator:
+    sessions: async_sessionmaker[AsyncSession]
+    farms: FarmContextService
+    provider: LLMProvider
+    gateway: ToolGateway
+    runtime: AgentRuntime
+    lexicon: LexiconLike | None = None
+    max_iterations: int = 8
+    model_label: str = "llm"
+
+    async def run_turn(
+        self, caller: Caller, farm: FarmRef, message: InboundMessage
+    ) -> list[OutboundMessage]:
+        if caller.user_id is None:  # le répartiteur ne nous transmet que des utilisateurs appairés
+            return []
+        if message.kind is InboundKind.VOICE:
+            return [OutboundMessage(text=VOICE_LATER)]
+        if message.kind is InboundKind.PHOTO and not message.text:
+            return [OutboundMessage(text=PHOTO_LATER)]
+        text = (message.text or "").strip()
+        if not text:
+            return [OutboundMessage(text="Écrivez-moi votre question. /aide")]
+
+        access = await self.farms.ekylibre(farm, caller.user_id)
+        if access is not None and access.client is None:
+            return [OutboundMessage(text=RECONNECT)]
+
+        ctx = ToolContext(
+            farm_id=farm.farm_id,
+            farm_name=farm.name,
+            role="owner" if farm.role == "owner" else "worker",
+            user_id=caller.user_id,
+            today=date.today(),
+            ekylibre=access.client if access else None,
+            lexicon=self.lexicon,
+            aliases=await self._aliases(farm.farm_id),
+            skills={name: doc.body for name, doc in self.runtime.skills.items()},
+        )
+        conversation_id, history = await self._history(
+            farm.farm_id, caller.user_id, message.channel
+        )
+        messages: list[dict[str, Any]] = [*history, {"role": "user", "content": text}]
+
+        try:
+            answer, usage = await self._loop(ctx, messages)
+        except ToolAbort as abort:
+            if abort.reason == RECONNECT_REASON and access is not None:
+                await self.farms.mark_needs_reconnect(farm, access.connection_id, caller.user_id)
+                return [OutboundMessage(text=RECONNECT)]
+            raise
+        except LLMError as exc:
+            log.warning("agent.llm_error", error=str(exc))
+            return [OutboundMessage(text=UNAVAILABLE)]
+
+        await self._record(farm.farm_id, conversation_id, text, answer, usage)
+        return [OutboundMessage(text=answer)]
+
+    async def _loop(self, ctx: ToolContext, messages: list[dict[str, Any]]) -> tuple[str, Usage]:
+        system = SystemPrompt(stable=self.runtime.stable_prompt(), volatile=self._volatile(ctx))
+        tools = self.gateway.definitions(ctx)
+        usage = Usage()
+        for _ in range(self.max_iterations):
+            result = await self.provider.complete(system, messages, tools)
+            usage += result.usage
+            if result.refused:
+                log.info("agent.refusal")
+                return REFUSED, usage
+            if not result.tool_calls:
+                return result.text or TOO_LONG, usage
+            if usage.input_tokens + usage.output_tokens > MAX_TURN_TOKENS:
+                log.warning("agent.token_budget")
+                return TOO_LONG, usage
+            messages.append({"role": "assistant", "content": result.assistant_content})
+            outcomes = await asyncio.gather(
+                *(self.gateway.execute(ctx, call.name, call.input) for call in result.tool_calls)
+            )
+            # Tous les résultats dans un seul message, dans l'ordre des appels.
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": call.id,
+                            "content": outcome.content,
+                            "is_error": outcome.is_error,
+                        }
+                        for call, outcome in zip(result.tool_calls, outcomes, strict=True)
+                    ],
+                }
+            )
+        log.warning("agent.max_iterations")
+        return TOO_LONG, usage
+
+    @staticmethod
+    def _volatile(ctx: ToolContext) -> str:
+        """Contexte propre à la requête, hors cache. Jamais d'identifiant interne ni de secret."""
+        role = "exploitant" if ctx.role == "owner" else "salarié"
+        lines = [
+            "# Contexte",
+            f"- Ferme : {ctx.farm_name}",
+            f"- Interlocuteur : {role}",
+            f"- Date du jour : {ctx.today.isoformat()} (campagne en cours : {ctx.today.year})",
+            f"- Ekylibre : {'connecté' if ctx.ekylibre else 'non connecté'}",
+        ]
+        if ctx.aliases:
+            lines.append(
+                "- Noms usuels confirmés : "
+                + "; ".join(f"« {k} » = {v}" for k, v in ctx.aliases.items())
+            )
+        return "\n".join(lines)
+
+    async def _aliases(self, farm_id: uuid.UUID) -> dict[str, str]:
+        async with farm_session(self.sessions, farm_id) as session:
+            rows = await session.scalars(
+                select(FarmMemory).where(
+                    FarmMemory.kind == "alias", FarmMemory.confirmed_at.is_not(None)
+                )
+            )
+            return {str(k): str(v) for row in rows for k, v in row.content.items()}
+
+    async def _history(
+        self, farm_id: uuid.UUID, user_id: uuid.UUID, channel: str
+    ) -> tuple[uuid.UUID, list[dict[str, Any]]]:
+        since = datetime.now(UTC) - HISTORY_WINDOW
+        async with farm_session(self.sessions, farm_id) as session:
+            conversation = await session.scalar(
+                select(Conversation)
+                .where(Conversation.user_id == user_id, Conversation.channel == channel)
+                .order_by(Conversation.last_message_at.desc())
+                .limit(1)
+            )
+            if conversation is None or conversation.last_message_at < since:
+                conversation = Conversation(farm_id=farm_id, user_id=user_id, channel=channel)
+                session.add(conversation)
+                await session.flush()
+                return conversation.id, []
+            rows = list(
+                await session.scalars(
+                    select(Message)
+                    .where(Message.conversation_id == conversation.id, Message.created_at >= since)
+                    .order_by(Message.created_at.desc())
+                    .limit(HISTORY_MESSAGES)
+                )
+            )
+        history = [{"role": m.role, "content": m.content} for m in reversed(rows)]
+        # L'historique doit commencer par l'utilisateur.
+        while history and history[0]["role"] != "user":
+            history.pop(0)
+        return conversation.id, history
+
+    async def _record(
+        self,
+        farm_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        question: str,
+        answer: str,
+        usage: Usage,
+    ) -> None:
+        """Hook on_turn_end : historique du tour et consommation (NF-SOB)."""
+        now = datetime.now(UTC)
+        async with farm_session(self.sessions, farm_id) as session:
+            # Horodatages explicites et croissants : now() est identique dans une transaction,
+            # ce qui rendrait l'ordre question/réponse indéterminé à la relecture.
+            session.add(
+                Message(
+                    farm_id=farm_id,
+                    conversation_id=conversation_id,
+                    role="user",
+                    content=question,
+                    created_at=now,
+                )
+            )
+            session.add(
+                Message(
+                    farm_id=farm_id,
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=answer,
+                    created_at=now + timedelta(milliseconds=1),
+                )
+            )
+            conversation = await session.get(Conversation, conversation_id)
+            if conversation is not None:
+                conversation.last_message_at = now
+            stmt = insert(UsageMetric).values(
+                farm_id=farm_id,
+                day=now.date(),
+                model=self.model_label,
+                tokens_in=usage.input_tokens + usage.cache_read_tokens + usage.cache_write_tokens,
+                tokens_out=usage.output_tokens,
+            )
+            await session.execute(
+                stmt.on_conflict_do_update(
+                    index_elements=["farm_id", "day", "model"],
+                    set_={
+                        "tokens_in": UsageMetric.tokens_in + stmt.excluded.tokens_in,
+                        "tokens_out": UsageMetric.tokens_out + stmt.excluded.tokens_out,
+                    },
+                )
+            )
+        log.info(
+            "agent.turn",
+            tokens_in=usage.input_tokens,
+            tokens_out=usage.output_tokens,
+            cache_read=usage.cache_read_tokens,
+        )

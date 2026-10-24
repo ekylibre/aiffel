@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     ekylibre_allowed_domains: tuple[str, ...] = ("ekylibre-dev.com", "ekylibre.com")
     pairing_code_ttl_minutes: int = 15
 
+    # Moteur d'agent (A4). Modèle et effort modifiables sans toucher au code (NF-SOB).
+    llm_model: str = "claude-opus-5-5"
+    llm_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    llm_max_tokens: int = 16000
+    agent_max_iterations: int = 8
+    lexicon_mcp_url: str = "https://lexicon.osfarm.org/mcp"
+
     # Secrets : SecretStr empêche leur affichage dans les logs et les repr.
     # Connexion applicative (rôle aiffel_app, soumis à la RLS).
     database_url: SecretStr | None = None
