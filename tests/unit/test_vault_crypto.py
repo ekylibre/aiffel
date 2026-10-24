@@ -101,3 +101,15 @@ def test_tampered_secret_is_rejected(keyring: Keyring) -> None:
     tampered = bytes([ciphertext[0] ^ 1]) + ciphertext[1:]
     with pytest.raises(VaultError):
         decrypt_secret(data_key, aad, tampered, nonce)
+
+
+def test_global_encryption_roundtrip_and_purpose_binding(keyring: Keyring) -> None:
+    from aiffel.vault.crypto import decrypt_global, encrypt_global
+
+    blob = encrypt_global(keyring, "channel-id:telegram", "123456789")
+    assert b"123456789" not in blob
+    assert decrypt_global(keyring, "channel-id:telegram", blob) == "123456789"
+    with pytest.raises(VaultError):
+        decrypt_global(keyring, "channel-id:whatsapp", blob)
+    with pytest.raises(VaultError):
+        decrypt_global(Keyring.parse(generate_key()), "channel-id:telegram", blob)

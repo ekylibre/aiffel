@@ -17,6 +17,8 @@ uv run mypy aiffel                             # typage (strict sur vault/, acti
 docker compose -f docker/compose.dev.yml up -d db   # Postgres local sur 127.0.0.1:5442
 uv run alembic upgrade head                    # migrations (AIFFEL_MIGRATION_DATABASE_URL, propriétaire)
 uv run uvicorn aiffel.app.main:app --reload    # application en local (rôle aiffel_app)
+uv run python -m aiffel.worker                  # worker de la file des messages entrants
+uv run python -m aiffel.channels.telegram.poll  # dev : Telegram en polling (bot de test, sans webhook)
 docker build -f docker/Dockerfile -t aiffel .  # image
 ```
 
