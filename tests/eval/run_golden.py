@@ -24,6 +24,7 @@ from aiffel.app.container import make_provider
 from aiffel.connectors.lexicon.client import LexiconClient
 from aiffel.logging import configure_logging
 from aiffel.orchestrator.agent import Orchestrator
+from aiffel.orchestrator.llm import LLMError
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.settings import Settings
 from aiffel.tools.catalog import phase1_tools, propose_tools
@@ -153,9 +154,15 @@ async def main() -> None:
                 max_iterations=settings.agent_max_iterations,
                 model_label=model,
             )
-            row = await run_entry(
-                orchestrator, farm, http, entry, today=args.today, model=model, lexicon=lexicon
-            )  # type: ignore[arg-type]
+            try:
+                row = await run_entry(
+                    orchestrator, farm, http, entry, today=args.today, model=model, lexicon=lexicon
+                )  # type: ignore[arg-type]
+            except LLMError as exc:
+                print(f"⚠️ {exc} : {entry.text[:60]}")
+                if "402" in str(exc):  # plus de crédit : inutile de continuer
+                    spent = args.budget
+                return None
             spent += row.cost_usd
             mark = "✓" if row.predicted_intent == row.expected_intent else "✗"
             print(f"{mark} {row.latency_s:5.1f}s ${row.cost_usd:.3f}  {entry.text[:70]}")
@@ -165,7 +172,7 @@ async def main() -> None:
         results = await asyncio.gather(*(one(entry, http) for entry in corpus))
     rows = [row for row in results if row is not None]
     if len(rows) < len(corpus):
-        print(f"⚠️ plafond de {args.budget} $ atteint : {len(rows)}/{len(corpus)} phrases jouées")
+        print(f"⚠️ {len(rows)}/{len(corpus)} phrases jouées (plafond, crédit ou erreurs)")
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     path = REPORTS / f"{stamp}-{model.replace('/', '_')}-{effort}.csv"
