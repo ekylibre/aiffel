@@ -15,7 +15,8 @@ uv run pytest -q                               # tests
 uv run ruff check . && uv run ruff format .    # lint et format
 uv run mypy aiffel                             # typage (strict sur vault/, actions/, tools/)
 docker compose -f docker/compose.dev.yml up -d db   # Postgres local sur 127.0.0.1:5442
-uv run uvicorn aiffel.app.main:app --reload    # application en local
+uv run alembic upgrade head                    # migrations (AIFFEL_MIGRATION_DATABASE_URL, propriétaire)
+uv run uvicorn aiffel.app.main:app --reload    # application en local (rôle aiffel_app)
 docker build -f docker/Dockerfile -t aiffel .  # image
 ```
 
@@ -45,6 +46,19 @@ docker build -f docker/Dockerfile -t aiffel .  # image
 5. **Ekylibre** : ne jamais appeler `DELETE /api/v2/tokens`, car le `simple-token` est partagé avec
    zero-mobile et Duke (ADR-07).
 6. Les tests `tests/isolation/` et ceux de validation des écritures sont **bloquants**.
+
+## Base de données
+
+- Schéma `aiffel`. Les migrations tournent avec le **propriétaire** ; l'application se connecte avec le
+  rôle **`aiffel_app`**, créé `NOLOGIN` par la migration. Au déploiement :
+  `ALTER ROLE aiffel_app LOGIN PASSWORD '...'`.
+- Données d'une ferme : toujours via `farm_session(sessions, farm_id)`, ce qui fixe `aiffel.farm_id`
+  pour la RLS. Seule exception inter-fermes : la fonction `aiffel.farms_of_user(user_id)`.
+- `audit_log` : `INSERT` et `SELECT` seulement pour l'application ; empreintes chaînées calculées par
+  un trigger ; vérification par `aiffel.db.audit.verify_chain`.
+- Clé maître : `AIFFEL_MASTER_KEY=1:<clé>` (générer avec
+  `uv run python -c "from aiffel.vault import generate_key; print(generate_key())"`). **La perdre rend
+  tous les secrets illisibles** : il faut une copie hors ligne.
 
 ## Conventions
 

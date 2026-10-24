@@ -15,7 +15,10 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
 
     # Secrets : SecretStr empêche leur affichage dans les logs et les repr.
+    # Connexion applicative (rôle aiffel_app, soumis à la RLS).
     database_url: SecretStr | None = None
+    # Connexion des migrations (propriétaire du schéma) ; par défaut la même que database_url.
+    migration_database_url: SecretStr | None = None
     master_key: SecretStr | None = None
     hash_salt: SecretStr | None = None
     telegram_bot_token: SecretStr | None = None

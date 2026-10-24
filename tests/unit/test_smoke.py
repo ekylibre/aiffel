@@ -48,3 +48,16 @@ def test_logging_pipeline_redacts(capsys) -> None:
     out = capsys.readouterr().out
     assert "hunter2" not in out
     assert "demo" in out
+
+
+def test_readyz_reports_unreachable_database(monkeypatch) -> None:
+    from aiffel.settings import get_settings
+
+    monkeypatch.setenv("AIFFEL_DATABASE_URL", "postgresql+psycopg://x:y@127.0.0.1:1/none")
+    get_settings.cache_clear()
+    try:
+        response = TestClient(create_app()).get("/readyz")
+    finally:
+        get_settings.cache_clear()
+    assert response.status_code == 503
+    assert "y@" not in response.text
