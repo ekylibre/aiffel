@@ -25,6 +25,14 @@ from aiffel.db.session import farm_session
 
 log = structlog.get_logger()
 
+# Contexte donné à Whisper : il oriente la reconnaissance vers le vocabulaire agricole
+# (« pulvérisé » plutôt que « pu vériser »). Des mots, pas de données de ferme.
+AGRI_PROMPT = (
+    "Intervention agricole : j'ai pulvérisé, désherbé, semé, labouré, déchaumé, fertilisé, "
+    "épandu, récolté, moissonné, ensilé, fauché, broyé. Pulvérisation de fongicide, herbicide, "
+    "insecticide, à 1 L/ha, 2 litres par hectare, 150 kg/ha, unités d'azote. Parcelle, îlot, "
+    "culture, maïs, blé tendre, orge, colza, tournesol, soja, luzerne, prairie, troupeau."
+)
 DEFAULT_MAX_SECONDS = 180
 DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 STT_METRIC_MODEL = "stt"
@@ -66,6 +74,7 @@ class WhisperTranscriber:
     compute_type: str = "int8"
     language: str = "fr"
     cache_dir: str | None = None
+    initial_prompt: str | None = AGRI_PROMPT
     _model: Any = field(default=None, init=False, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
@@ -76,7 +85,11 @@ class WhisperTranscriber:
     def _run(self, model: Any, audio: bytes) -> str:
         # PyAV (dépendance de faster-whisper) décode l'OGG/Opus de Telegram : pas de ffmpeg système.
         segments, _info = model.transcribe(
-            BytesIO(audio), language=self.language, vad_filter=True, beam_size=5
+            BytesIO(audio),
+            language=self.language,
+            vad_filter=True,
+            beam_size=5,
+            initial_prompt=self.initial_prompt,
         )
         return " ".join(segment.text.strip() for segment in segments).strip()
 
