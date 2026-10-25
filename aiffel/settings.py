@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     whisper_cache_dir: str | None = None
     voice_max_seconds: int = 180
 
+    # Photos : identification des maladies et des plantes par Pl@ntNet (clé de la plateforme).
+    plantnet_base_url: str = "https://my-api.plantnet.org"
+    photo_max_bytes: int = 10 * 1024 * 1024
+
     # Secrets : SecretStr empêche leur affichage dans les logs et les repr.
     # Connexion applicative (rôle aiffel_app, soumis à la RLS).
     database_url: SecretStr | None = None
@@ -51,6 +55,9 @@ class Settings(BaseSettings):
             "AIFFEL_OPENROUTER_API_KEY", "OPENROUTER_API_KEY", "OPEN_ROUTEUR_API_KEY"
         ),
     )
+    plantnet_api_key: SecretStr | None = Field(
+        None, validation_alias=AliasChoices("AIFFEL_PLANTNET_API_KEY", "PLANTNET_API_KEY")
+    )
 
     @field_validator(
         "database_url",
@@ -61,6 +68,7 @@ class Settings(BaseSettings):
         "telegram_webhook_secret",
         "anthropic_api_key",
         "openrouter_api_key",
+        "plantnet_api_key",
         mode="before",
     )
     @classmethod

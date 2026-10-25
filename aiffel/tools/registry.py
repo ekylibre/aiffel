@@ -28,7 +28,7 @@ log = structlog.get_logger()
 MAX_RESULT_CHARS = 20_000
 TOOL_TIMEOUT_S = 30.0
 Role = Literal["owner", "worker"]
-Requirement = Literal["ekylibre", "lexicon"]
+Requirement = Literal["ekylibre", "lexicon", "plantnet"]
 
 
 class ToolAbort(Exception):
@@ -47,6 +47,14 @@ class LexiconLike(Protocol):
     async def call(self, name: str, arguments: dict[str, Any]) -> Any: ...
 
 
+class PlantNetLike(Protocol):
+    async def identify_disease(self, images: list[bytes]) -> Any: ...
+
+    async def identify_species(self, images: list[bytes]) -> Any: ...
+
+    async def aclose(self) -> None: ...
+
+
 @dataclass
 class ToolContext:
     farm_id: uuid.UUID
@@ -61,12 +69,18 @@ class ToolContext:
     # Service des propositions (A5) et propositions créées pendant le tour.
     actions: Any | None = None
     proposals: list[Any] = field(default_factory=list)
+    # Photos du message en cours (en mémoire) : seuls les outils Pl@ntNet les lisent, le modèle
+    # ne les voit pas.
+    plantnet: PlantNetLike | None = None
+    photos: list[bytes] = field(default_factory=list, repr=False)
 
     def has(self, requirement: Requirement | None) -> bool:
         if requirement == "ekylibre":
             return self.ekylibre is not None
         if requirement == "lexicon":
             return self.lexicon is not None
+        if requirement == "plantnet":
+            return self.plantnet is not None and bool(self.photos)
         return True
 
 

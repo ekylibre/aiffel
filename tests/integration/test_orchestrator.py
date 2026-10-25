@@ -15,17 +15,30 @@ from aiffel.channels.base import InboundKind, InboundMessage
 from aiffel.channels.dispatcher import Caller
 from aiffel.channels.identity import IdentityService
 from aiffel.connectors.ekylibre.auth import EkylibreInstance
+from aiffel.connectors.plantnet.client import Match
 from aiffel.db.models import Connection, FarmMemory, Message
 from aiffel.db.session import farm_session, global_session
 from aiffel.extensions import UsageEvent
 from aiffel.farm_context import FarmContextService, FarmRef
-from aiffel.orchestrator.agent import RECONNECT, REFUSED, TOO_LONG, UNAVAILABLE, Orchestrator
+from aiffel.orchestrator.agent import (
+    PHOTO_FAILED,
+    PHOTO_LATER,
+    PHOTO_NOTE,
+    PHOTO_QUESTION,
+    PHOTO_TOO_LARGE,
+    RECONNECT,
+    REFUSED,
+    TOO_LONG,
+    UNAVAILABLE,
+    Orchestrator,
+)
 from aiffel.orchestrator.llm import LLMError, LLMResult, SystemPrompt, ToolCall, Usage
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.pairing import PairingResult, PairingService
 from aiffel.tools.catalog import phase1_tools
 from aiffel.tools.registry import ToolGateway
 from aiffel.vault import Keyring, SecretValue
+from aiffel.voice import AudioTooLargeError
 from tests.fakes import FakeEkylibre
 
 Sessions = async_sessionmaker[AsyncSession]
@@ -317,3 +330,103 @@ async def test_unknown_tool_from_the_model_is_refused(
     tool_result = provider.calls[1]["messages"][-1]["content"][0]
     assert tool_result["is_error"] and "indisponible" in tool_result["content"]
     assert uuid.UUID(str(result.farm_id))  # sanity
+
+
+class FakePlantNet:
+    def __init__(self) -> None:
+        self.images: list[list[bytes]] = []
+
+    async def identify_disease(self, images: list[bytes]) -> Any:
+        self.images.append(images)
+        return [Match("Mildiou de la pomme de terre", 0.82, {"code": "PHYTIN"})]
+
+    async def identify_species(self, images: list[bytes]) -> Any:
+        return []
+
+    async def aclose(self) -> None:
+        return None
+
+
+def _photo(caption: str | None = None) -> InboundMessage:
+    return _msg(caption or "", kind=InboundKind.PHOTO).model_copy(
+        update={"file_id": "photo-file", "text": caption}
+    )
+
+
+async def test_photo_is_analysed_by_plantnet_and_never_sent_to_the_model(
+    app_sessions: Sessions, paired: tuple[PairingResult, FakeEkylibre, FarmContextService]
+) -> None:
+    result, _fake, farms = paired
+    plantnet = FakePlantNet()
+    fetched: list[tuple[str, int]] = []
+
+    async def fetch(file_id: str, max_bytes: int) -> bytes:
+        fetched.append((file_id, max_bytes))
+        return b"\xff\xd8PHOTO-BYTES"
+
+    provider = ScriptedProvider(
+        tool_turn(("plantnet_identifier_maladie", {})),
+        final("Probablement du mildiou. Source : Pl@ntNet"),
+    )
+    caller, farm = _farm(result)
+    orchestrator = _orchestrator(
+        app_sessions, farms, provider, plantnet=plantnet, fetch_photo=fetch, photo_max_bytes=1234
+    )
+    [reply] = await orchestrator.run_turn(caller, farm, _photo("Qu'a ma pomme de terre ?"))
+
+    assert reply.text.startswith("Probablement du mildiou")
+    assert fetched == [("photo-file", 1234)]
+    assert plantnet.images == [[b"\xff\xd8PHOTO-BYTES"]]
+    first = provider.calls[0]
+    assert {"plantnet_identifier_maladie", "plantnet_identifier_espece"} <= {
+        t["name"] for t in first["tools"]
+    }
+    assert first["messages"][-1]["content"].startswith(PHOTO_NOTE)
+    sent = provider.everything_sent()
+    assert "PHOTO-BYTES" not in sent and "photo-file" not in sent
+    assert "Mildiou de la pomme de terre" in json.dumps(
+        provider.calls[1]["messages"][-1], ensure_ascii=False
+    )
+    async with farm_session(app_sessions, result.farm_id) as session:
+        stored = list(await session.scalars(select(Message.content).where(Message.role == "user")))
+    assert stored[-1] == "[Photo] Qu'a ma pomme de terre ?"
+
+
+async def test_photo_without_caption_or_without_plantnet(
+    app_sessions: Sessions, paired: tuple[PairingResult, FakeEkylibre, FarmContextService]
+) -> None:
+    result, _fake, farms = paired
+    caller, farm = _farm(result)
+
+    provider = ScriptedProvider()
+    [reply] = await _orchestrator(app_sessions, farms, provider).run_turn(caller, farm, _photo())
+    assert reply.text == PHOTO_LATER and not provider.calls
+
+    async def fetch(_file_id: str, _max: int) -> bytes:
+        return b"img"
+
+    provider = ScriptedProvider(final("ok"))
+    await _orchestrator(
+        app_sessions, farms, provider, plantnet=FakePlantNet(), fetch_photo=fetch
+    ).run_turn(caller, farm, _photo())
+    assert PHOTO_QUESTION in provider.calls[0]["messages"][-1]["content"]
+
+
+async def test_photo_too_large_or_unavailable(
+    app_sessions: Sessions, paired: tuple[PairingResult, FakeEkylibre, FarmContextService]
+) -> None:
+    result, _fake, farms = paired
+    caller, farm = _farm(result)
+
+    async def too_large(_file_id: str, max_bytes: int) -> bytes:
+        raise AudioTooLargeError(max_bytes + 1)
+
+    async def broken(_file_id: str, _max: int) -> bytes:
+        raise RuntimeError("telegram down")
+
+    for fetch, expected in ((too_large, PHOTO_TOO_LARGE), (broken, PHOTO_FAILED)):
+        provider = ScriptedProvider()
+        [reply] = await _orchestrator(
+            app_sessions, farms, provider, plantnet=FakePlantNet(), fetch_photo=fetch
+        ).run_turn(caller, farm, _photo("quoi ?"))
+        assert reply.text == expected and not provider.calls

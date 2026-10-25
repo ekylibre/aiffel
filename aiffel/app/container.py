@@ -16,6 +16,7 @@ from aiffel.channels.handlers import Handlers, placeholder_assistant
 from aiffel.channels.identity import IdentityService
 from aiffel.channels.telegram.api import TelegramClient
 from aiffel.connectors.lexicon.client import LexiconClient
+from aiffel.connectors.plantnet.client import PlantNetClient
 from aiffel.db.models import ChannelIdentity
 from aiffel.db.session import global_session, make_engine, make_sessionmaker
 from aiffel.extensions import (
@@ -117,6 +118,8 @@ class Services:
         if self.llm is not None:
             await self.llm.aclose()
             await self.llm.http.aclose()
+        if self.orchestrator is not None and self.orchestrator.plantnet is not None:
+            await self.orchestrator.plantnet.aclose()
         await self.telegram.aclose()
         await self.http.aclose()
         await self.engine.dispose()
@@ -211,6 +214,16 @@ def build_services(settings: Settings | None = None) -> Services:
         actions=actions,
         llm=llm,
         on_usage=on_usage(extensions),
+        plantnet=(
+            PlantNetClient(
+                SecretValue(settings.plantnet_api_key.get_secret_value()),
+                base_url=settings.plantnet_base_url,
+            )
+            if settings.plantnet_api_key
+            else None
+        ),
+        fetch_photo=telegram.download,
+        photo_max_bytes=settings.photo_max_bytes,
     )
     voice = (
         VoiceService(
