@@ -49,7 +49,7 @@ EXPIRED = {
 }
 # Objet d'un lien créé par une extension : message générique quand il a expiré.
 EXPIRED_OTHER = "Ce lien n'est plus valable. Redemandez-le à Aiffel sur Telegram."
-# Appelé dans la transaction qui crée une ferme (démarrage de l'essai, quand le paiement est actif).
+# Appelé dans la transaction qui crée une ferme : hook des extensions (``on_farm_created``).
 FarmCreatedHook = Callable[[AsyncSession, uuid.UUID], Awaitable[None]]
 CONNECTOR = "ekylibre"
 # Noms de types de secrets (pas des secrets).

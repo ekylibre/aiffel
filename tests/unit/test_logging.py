@@ -19,7 +19,7 @@ async def test_http_client_urls_are_not_logged(
     assert "SECRET-TOKEN" not in caplog.text
 
 
-def test_billing_fields_are_masked() -> None:
+def test_business_identifiers_are_masked() -> None:
     from aiffel.logging import redact
 
     event = {"iban": "FR76", "siret": "808", "vat_number": "FR06", "legal_name": "G", "to": "a@b"}
