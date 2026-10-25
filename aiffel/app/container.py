@@ -31,6 +31,7 @@ from aiffel.extensions import (
 from aiffel.farm_context import FarmContextService
 from aiffel.farm_llm import FarmLLMService
 from aiffel.logging import configure_logging
+from aiffel.memory import MemoryService
 from aiffel.orchestrator.agent import Orchestrator
 from aiffel.orchestrator.llm import AnthropicProvider, Effort, LLMProvider
 from aiffel.orchestrator.runtime import AgentRuntime
@@ -71,6 +72,7 @@ class Services:
     voice: VoiceService | None = None
     llm: FarmLLMService | None = None
     extensions: list[Extension] = field(default_factory=list)
+    memory: MemoryService | None = None
     _dispatcher: Dispatcher | None = field(default=None, init=False)
 
     def handlers(self) -> Handlers:
@@ -84,6 +86,7 @@ class Services:
             self.voice,
             self.llm,
             self.extensions,
+            self.memory,
         )
 
     def dispatcher(self) -> Dispatcher:
@@ -181,6 +184,7 @@ def build_services(settings: Settings | None = None) -> Services:
     farms = FarmContextService(sessions, keyring, http)
     lexicon = LexiconClient(settings.lexicon_mcp_url)
     actions = ActionService(sessions)
+    memory = MemoryService(sessions)
     telegram = TelegramClient(SecretValue(bot_token))
     identities = IdentityService(SecretValue(hash_salt), keyring)
     pairing = PairingService(
@@ -214,6 +218,7 @@ def build_services(settings: Settings | None = None) -> Services:
         actions=actions,
         llm=llm,
         on_usage=on_usage(extensions),
+        memory=memory,
         plantnet=(
             PlantNetClient(
                 SecretValue(settings.plantnet_api_key.get_secret_value()),
@@ -258,6 +263,7 @@ def build_services(settings: Settings | None = None) -> Services:
         voice=voice,
         llm=llm,
         extensions=extensions,
+        memory=memory,
     )
 
 

@@ -69,6 +69,9 @@ class ToolContext:
     # Service des propositions (A5) et propositions créées pendant le tour.
     actions: Any | None = None
     proposals: list[Any] = field(default_factory=list)
+    # Mémoire de la ferme (alias) et propositions de mémoire créées pendant le tour.
+    memory: Any | None = None
+    memory_proposals: list[Any] = field(default_factory=list)
     # Photos du message en cours (en mémoire) : seuls les outils Pl@ntNet les lisent, le modèle
     # ne les voit pas.
     plantnet: PlantNetLike | None = None
