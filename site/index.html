@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aiffel, l'assistant qui range les données de la ferme</title>
+<meta name="description" content="Aiffel est un assistant conversationnel pour l'exploitation agricole. Vous le dites une fois, à la voix ou par écrit : il prépare, vérifie et enregistre dans vos logiciels après votre accord.">
+<meta name="theme-color" content="#16211C">
+<link rel="canonical" href="https://aiffel.org/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:url" content="https://aiffel.org/">
+<meta property="og:title" content="Aiffel · Dites-le une fois. Aiffel le range au bon endroit.">
+<meta property="og:description" content="Un seul interlocuteur pour tous les logiciels de la ferme, qui cite ses sources et attend votre accord avant d'écrire.">
+<link rel="preload" href="/fonts/big-shoulders-display.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<svg width="0" height="0" class="defs" aria-hidden="true">
+  <defs>
+    <symbol id="signe" viewBox="0 0 64 64">
+      <path d="M6 58 L32 7 L58 58" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon class="barre" points="18.2,33.5 45.8,33.5 48.8,40.5 15.2,40.5"/>
+      <path d="M32 46 L32 58 M24.2 46 L20.6 58 M39.8 46 L43.4 58" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<a class="evitement" href="#contenu">Aller au contenu</a>
+
+<header class="entete">
+  <div class="page entete-dedans">
+    <a class="marque" href="/" aria-label="Aiffel, accueil">
+      <svg aria-hidden="true"><use href="#signe"/></svg>
+      <span>AIFFEL</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#concept">Concept</a>
+      <a href="#fonctionnement">Fonctionnement</a>
+      <a href="#garanties">Garanties</a>
+      <a href="#logiciels">Logiciels</a>
+      <a class="nav-offres" href="#offres">Offres</a>
+    </nav>
+  </div>
+</header>
+
+<main id="contenu" class="page">
+
+  <section class="ouverture" aria-labelledby="titre">
+    <div>
+      <p class="etiquette statut">Phase 1 en construction · Telegram · Ekylibre et Lexicon</p>
+      <h1 id="titre">Dites-le une fois. <mark>Aiffel</mark> le range au bon endroit.</h1>
+      <p class="chapeau">Aiffel est un assistant pour l'exploitation agricole. Vous lui parlez depuis votre téléphone, à la voix ou par écrit. Il prépare, vérifie, puis enregistre dans les logiciels que la ferme utilise déjà.</p>
+      <p class="chapeau discret">Il ne remplace aucun logiciel, et il n'écrit rien sans votre accord.</p>
+      <div class="actions">
+        <a class="bouton plein" href="#offres">Voir les offres</a>
+        <a class="bouton" href="#contact">Être prévenu du lancement</a>
+      </div>
+    </div>
+
+    <figure class="telephone" aria-label="Exemple de conversation avec Aiffel">
+      <div class="telephone-tete">
+        <svg aria-hidden="true"><use href="#signe"/></svg>
+        <div><strong>Aiffel</strong><small>Domaine des Combes</small></div>
+      </div>
+      <div class="fil">
+        <div class="bulle moi">
+          <div class="vocal" aria-hidden="true">
+            <span class="onde"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="data">0:11</span>
+          </div>
+          Message vocal
+        </div>
+        <div class="bulle lui">🎙️ J'ai compris : « Bouillie bordelaise sur Vigne du Bas hier après-midi, 5 kilos hectare, pendant 2 heures. »<span class="petit">(Si c'est faux, écrivez-moi la correction.)</span></div>
+        <div class="groupe">
+          <div class="bulle lui recap">
+            <p><strong>📝 Intervention à valider</strong></p>
+            <p>• Pulvérisation, le 23/10/2026 à 14:00, durée 2 h</p>
+            <p>• Cibles : Vigne du Bas</p>
+            <p>• Intrant : Bouillie bordelaise, 5 kg/ha</p>
+            <p class="ctl debut">✅ BOUILLIE BORDELAISE MANICA N.C. (AMM 2010618) : dose conforme (max 7,5 kg/ha).</p>
+            <p class="ctl">✅ Délai avant récolte : 21 jours.</p>
+          </div>
+          <div class="kbd" aria-hidden="true"><span>✅ Valider</span><span>✏️ Corriger</span><span>✖️ Annuler</span></div>
+        </div>
+        <div class="bulle lui">Enregistrée dans Ekylibre ✅ (n° 1842).</div>
+      </div>
+      <figcaption class="etiquette note-exemple">Format réel des messages · ferme et chiffres fictifs</figcaption>
+    </figure>
+  </section>
+
+  <section class="section" id="concept" aria-labelledby="s-constat">
+    <p class="etiquette">Le constat</p>
+    <div class="contenu">
+      <h2 id="s-constat">L'IA fait fleurir les outils, et la ferme s'y perd</h2>
+      <p class="intro">Chaque mois apporte une nouvelle application. Les anciennes restent, parce qu'elles portent l'historique et les obligations. Le soir, il faut tout ressaisir, dans des logiciels qui ne se parlent pas.</p>
+      <div class="constat">
+        <div class="symptome"><strong>La ressaisie</strong><p>Le cahier de traitements, les stocks, les factures : chaque soir, dans plusieurs logiciels.</p></div>
+        <div class="symptome"><strong>Les applis en pagaille</strong><p>Une par tâche, chacune avec son compte, son écran et sa logique.</p></div>
+        <div class="symptome"><strong>Les données éparpillées</strong><p>Copiées d'un outil à l'autre, et jamais à jour partout.</p></div>
+        <div class="symptome"><strong>Les mots de passe</strong><p>Un identifiant par outil, oublié ou noté sur un coin de carnet.</p></div>
+      </div>
+      <div class="reponse">
+        <div><b>Solide</b><p>Une seule structure porte tous les outils, comme la charpente de la tour Eiffel.</p></div>
+        <div><b>Simple</b><p>Une seule conversation pour tout. Les accès aux logiciels sont gardés dans un coffre chiffré.</p></div>
+        <div><b>Durable</b><p>Les outils changent, la structure reste. On remplace une pièce sans démonter l'ensemble.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-promesse">
+    <p class="etiquette">La promesse</p>
+    <div class="contenu">
+      <h2 id="s-promesse" class="promesse">Un seul interlocuteur pour tous les logiciels de la ferme, qui <em>cite ses sources</em> et <em>attend votre accord</em> avant d'écrire.</h2>
+    </div>
+  </section>
+
+  <section class="section" id="fonctionnement" aria-labelledby="s-comment">
+    <p class="etiquette">Fonctionnement</p>
+    <div class="contenu">
+      <h2 id="s-comment">Trois temps, un seul geste</h2>
+      <div class="etapes">
+        <div class="etape">
+          <span class="num" aria-hidden="true">1</span>
+          <h3>Vous le dites</h3>
+          <p>Un vocal depuis la cabine ou un message écrit, avec les noms de parcelles de la ferme. Aiffel vous redit ce qu'il a compris.</p>
+        </div>
+        <div class="etape">
+          <span class="num" aria-hidden="true">2</span>
+          <h3>Aiffel prépare et vérifie</h3>
+          <p>Il complète la date, la parcelle et le produit, puis contrôle la dose, la zone non traitée et le délai avant récolte dans Lexicon.</p>
+        </div>
+        <div class="etape">
+          <span class="num" aria-hidden="true">3</span>
+          <h3>Vous validez</h3>
+          <p>Un bouton Valider, et l'intervention arrive dans Ekylibre avec son numéro. Avant, tout se corrige ou s'annule.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-tour">
+    <p class="etiquette">L'architecture</p>
+    <div class="contenu tour">
+      <svg class="silhouette" viewBox="0 0 180 162" role="img" aria-labelledby="tour-titre">
+        <title id="tour-titre">La tour Aiffel : l'agriculteur au sommet, Aiffel au milieu, les logiciels de la ferme dans les fondations</title>
+        <g class="treillis">
+          <path d="M14 158 L48 145 M44 158 L23 145 M23 145 L48 145 M23 145 L53 130 M48 145 L36 130 M36 130 L53 130 M36 130 L57 118 M53 130 L44 118 M44 118 L57 118"/>
+          <path d="M166 158 L132 145 M136 158 L157 145 M157 145 L132 145 M157 145 L127 130 M132 145 L144 130 M144 130 L127 130 M144 130 L123 118 M127 130 L136 118 M136 118 L123 118"/>
+          <path d="M50 108 L119 83 M130 108 L61 83 M61 83 L119 83 M61 83 L108 58 M119 83 L72 58"/>
+          <path d="M72 58 L101 37 M108 58 L79 37 M79 37 L101 37 M79 37 L95 16 M101 37 L85 16"/>
+        </g>
+        <path class="structure epais" d="M14 158 C 28 140, 42 124, 50 108 C 57 90, 66 74, 72 58 C 78 42, 83 28, 85 16 L 87.4 9"/>
+        <path class="structure epais" d="M166 158 C 152 140, 138 124, 130 108 C 123 90, 114 74, 108 58 C 102 42, 97 28, 95 16 L 92.6 9"/>
+        <path class="structure" d="M44 158 C 50 140, 56 124, 60 108.5"/>
+        <path class="structure" d="M136 158 C 130 140, 124 124, 120 108.5"/>
+        <path class="structure" d="M54 128 Q 90 103 126 128"/>
+        <rect class="plateforme" x="44" y="106" width="92" height="3"/>
+        <rect class="plateforme" x="67" y="56.4" width="46" height="2.2"/>
+        <polygon class="herbe" points="68.5,58.6 111.5,58.6 113.6,62.6 66.4,62.6"/>
+        <rect class="plateforme" x="81.5" y="15" width="17" height="1.6"/>
+        <rect class="plateforme" x="87" y="6.6" width="6" height="2.6" rx="0.4"/>
+        <line class="structure fin" x1="90" y1="0.6" x2="90" y2="6.6"/>
+        <line class="structure" x1="6" y1="158.3" x2="174" y2="158.3"/>
+        <g class="repere"><circle cx="118" cy="11" r="5"/><text x="118" y="13.2">1</text></g>
+        <g class="repere"><circle cx="130" cy="60" r="5"/><text x="130" y="62.2">2</text></g>
+        <g class="repere"><circle cx="160" cy="146" r="5"/><text x="160" y="148.2">3</text></g>
+        <path class="flux-bas" d="M8 24 L8 136 M5.6 132.4 L8 136 L10.4 132.4"/>
+        <path class="flux-haut" d="M172 120 L172 24 M169.6 27.6 L172 24 L174.4 27.6"/>
+      </svg>
+      <div>
+        <h2 id="s-tour">Aiffel tient comme une tour</h2>
+        <ol class="niveaux">
+          <li><span class="pastille">1</span><div><h3>Au sommet, l'agriculteur</h3><p>Il parle avec ses mots, sur Telegram aujourd'hui, puis sur WhatsApp, le web et le mobile.</p></div></li>
+          <li><span class="pastille">2</span><div><h3>Au milieu, Aiffel</h3><p>Il comprend, vérifie et attend votre « Valider ». Les accès dorment dans un coffre chiffré, chaque réponse cite sa source, chaque écriture est journalisée.</p></div></li>
+          <li><span class="pastille">3</span><div><h3>Dans les fondations, vos logiciels</h3><p>Ils gardent les données. Aiffel les range au bon endroit et va y chercher ce qu'il faut pour répondre, sans rien copier.</p></div></li>
+        </ol>
+        <p class="legende-flux"><span class="vers-bas">Vous dites, il range</span><span class="vers-haut">Il répond, sources à l'appui</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="offres" aria-labelledby="s-offres">
+    <p class="etiquette">Offres</p>
+    <div class="contenu">
+      <h2 id="s-offres">Trois façons d'utiliser Aiffel</h2>
+      <p class="intro">Les trois offres partagent le même cœur open source et les mêmes garanties. Elles diffèrent par l'hébergement, la messagerie et la façon de payer l'IA. La validation, les sources et le coffre ne sont jamais des options payantes.</p>
+      <div class="offres">
+        <article class="offre">
+          <header>
+            <span class="etat">En test</span>
+            <h3>Aiffel Libre</h3>
+            <p class="prix">Gratuit</p>
+            <p class="prix-note">L'IA est payée directement à son fournisseur</p>
+          </header>
+          <ul class="liste est">
+            <li><p>Open source, sur votre serveur<span>Pour une ferme, une CUMA ou une coopérative qui héberge son outil.</span></p></li>
+            <li><p>Sur Telegram<span>Une messagerie à l'interface ouverte, indépendante de Meta.</span></p></li>
+            <li><p>Votre propre clé d'IA<span>Vous choisissez le fournisseur et payez seulement ce que vous consommez.</span></p></li>
+            <li><p>Documentation et communauté</p></li>
+          </ul>
+        </article>
+        <article class="offre vedette">
+          <header>
+            <span class="etat">En préparation</span>
+            <h3>Aiffel en ligne</h3>
+            <p class="prix">1,99 € <small>par mois</small></p>
+            <p class="prix-note"><strong>Gratuit pour les adhérents d'OSFarm</strong></p>
+          </header>
+          <ul class="liste est">
+            <li><p>Rien à installer<span>Le service est hébergé pour vous sur app.aiffel.org.</span></p></li>
+            <li><p>1 $ d'IA inclus chaque mois<span>Compté au coût réel, avec le modèle de votre choix (voir ci-dessous).</span></p></li>
+            <li><p>Au-delà, votre propre clé<span>Vous continuez sans changer d'offre.</span></p></li>
+            <li><p>Pour les agriculteurs</p></li>
+          </ul>
+        </article>
+        <article class="offre">
+          <header>
+            <span class="etat">Sur demande</span>
+            <h3>Aiffel Pro</h3>
+            <p class="prix">Sur devis</p>
+            <p class="prix-note">Pour les structures qui veulent un service clé en main</p>
+          </header>
+          <ul class="liste est">
+            <li><p>Sur WhatsApp<span>La messagerie que la plupart des agriculteurs ont déjà.</span></p></li>
+            <li><p>Prise en main et support</p></li>
+            <li><p>Connecteurs prioritaires<span>Pour les logiciels que vos adhérents ou clients utilisent.</span></p></li>
+            <li><p>Le même cœur open source</p></li>
+          </ul>
+        </article>
+      </div>
+
+      <h3 class="sous-titre" id="modeles">Le crédit d'IA d'Aiffel en ligne</h3>
+      <p class="intro">Le crédit inclus vaut 1 $ d'IA par mois, compté au coût réel. Vous choisissez votre modèle : plus de messages, ou des réponses plus rapides.</p>
+      <div class="tableau">
+        <table>
+          <thead><tr><th>Modèle</th><th>Messages par mois avec le crédit</th><th>Temps de réponse moyen</th><th>À noter</th></tr></thead>
+          <tbody>
+            <tr><td>Claude Haiku 5.5 <span class="qui">Anthropic</span></td><td class="data">≈ 150</td><td class="data">≈ 17 s</td><td>Le plus rapide</td></tr>
+            <tr><td>Mistral Large 4 <span class="qui">Mistral AI</span></td><td class="data">≈ 45</td><td class="data">≈ 45 s</td><td>Le plus précis au banc d'essai, modèle européen</td></tr>
+            <tr><td>Nemotron 3 Ultra <span class="qui">NVIDIA</span></td><td>Sans décompte, dans la limite du service gratuit</td><td class="data">≈ 50 s</td><td>Gratuit, le plus lent</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Mesures faites sur le banc d'essai d'Aiffel (50 phrases réelles d'agriculteurs, octobre 2026), un message à la fois. Une vraie conversation consomme davantage : ces nombres sont des ordres de grandeur.</p>
+    </div>
+  </section>
+
+  <section class="section" id="garanties" aria-labelledby="s-garanties">
+    <p class="etiquette">Garanties</p>
+    <div class="contenu">
+      <h2 id="s-garanties">Tenues par le code, pas par une promesse</h2>
+      <div class="garanties">
+        <div><h3>Rien n'est enregistré sans votre « Valider »</h3><p>L'IA prépare, vous décidez. Seul votre appui sur le bouton déclenche l'écriture, et l'IA ne peut pas l'actionner.</p></div>
+        <div><h3>Il dit d'où vient chaque chiffre</h3><p>Le logiciel, la fiche Lexicon, le numéro d'AMM. Et il dit « je ne sais pas » quand il ne sait pas.</p></div>
+        <div><h3>Vos données restent dans vos logiciels</h3><p>Aiffel les relie sans les copier. Chaque information reste dans le logiciel qui en est la référence.</p></div>
+        <div><h3>Vos accès dans un coffre chiffré</h3><p>Les mots de passe et les clés sont chiffrés. L'IA n'en voit jamais aucun.</p></div>
+        <div><h3>Sobre</h3><p>Le plus petit modèle qui suffit, la voix transcrite sur le serveur d'Aiffel sans service tiers, aucun traceur publicitaire.</p></div>
+        <div><h3>Réversible</h3><p>Vous partez quand vous voulez : vos données n'ont jamais quitté vos logiciels.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-pourquoi">
+    <p class="etiquette">Pourquoi Aiffel</p>
+    <div class="contenu">
+      <h2 id="s-pourquoi">Un passeur, pas un logiciel de plus</h2>
+      <p class="intro">Aiffel parle à l'agriculteur <strong>et</strong> écrit dans les logiciels qu'il a déjà. Les autres assistants agricoles gardent souvent les données dans leur propre base : un outil de plus à tenir à jour.</p>
+      <div class="tableau">
+        <table class="comparatif">
+          <thead><tr><th></th><th>Aiffel</th><th>Autres assistants agricoles <span class="qui">relevé d'octobre 2026</span></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Où vont les données</th><td>Dans vos logiciels, sans copie</td><td>Dans la base de l'assistant</td></tr>
+            <tr><th scope="row">Validation avant enregistrement</th><td>Toutes les écritures</td><td>Aucune, ou seulement pour les traitements</td></tr>
+            <tr><th scope="row">Sources</th><td>Chaque chiffre cité</td><td>Rarement, souvent en option payante</td></tr>
+            <tr><th scope="row">Code</th><td>Ouvert</td><td>Fermé</td></tr>
+            <tr><th scope="row">Prix</th><td>Publics</td><td>Souvent sur devis ou après démo</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="logiciels" aria-labelledby="s-logiciels">
+    <p class="etiquette">Logiciels</p>
+    <div class="contenu">
+      <h2 id="s-logiciels">Ce qu'Aiffel relie</h2>
+      <div class="tableau">
+        <table>
+          <thead><tr><th>Logiciel</th><th>Usage</th><th>État</th></tr></thead>
+          <tbody>
+            <tr><td>Ekylibre</td><td>Gestion d'exploitation : parcelles, interventions, stocks, matériel</td><td><span class="acces ecrit">Branché</span></td></tr>
+            <tr><td>Lexicon</td><td>Référentiel ouvert : produits, homologations, doses, délais avant récolte</td><td><span class="acces ecrit">Branché</span></td></tr>
+            <tr><td>Lyvre</td><td>Comptabilité open source, factures</td><td><span class="acces prevu">Prévu</span></td></tr>
+            <tr><td>Geofolia, Smag Farmer, MesParcelles</td><td>Traçabilité et gestion parcellaire</td><td><span class="acces prevu">Prévu</span></td></tr>
+            <tr><td>Isacompta</td><td>Comptabilité agricole</td><td><span class="acces prevu">Prévu</span></td></tr>
+            <tr><td>Tableurs Excel</td><td>Les suivis faits maison</td><td><span class="acces prevu">Prévu</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Pour brancher un logiciel, Aiffel passe par son API ou son MCP quand il en a un, sinon par ses fichiers (Excel, CSV, PDF), et en dernier recours par les identifiants de la ferme gardés dans le coffre.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-qui">
+    <p class="etiquette">Pour qui</p>
+    <div class="contenu">
+      <h2 id="s-qui">D'abord l'agriculteur, et ceux qui l'accompagnent</h2>
+      <div class="publics">
+        <div><h3>Agriculteur</h3><p>Plus de ressaisie le soir, un registre de traitements tenu au fil de l'eau.</p><span class="acces lit">En ligne ou Libre</span></div>
+        <div><h3>CUMA, coopérative</h3><p>Un service à installer sur son propre serveur pour ses adhérents, à ses couleurs.</p><span class="acces lit">Libre</span></div>
+        <div><h3>Conseiller, chambre d'agriculture</h3><p>Des données de ferme à jour et sourcées pour préparer ses visites.</p><span class="acces lit">Pro</span></div>
+        <div><h3>Cabinet comptable</h3><p>Des données propres en amont de la comptabilité, sans ressaisie.</p><span class="acces lit">Pro</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-principes">
+    <p class="etiquette">Principes</p>
+    <div class="contenu">
+      <h2 id="s-principes">Une IA de confiance, sobre et souveraine</h2>
+      <div class="principes">
+        <div class="principe"><h3>Il cite ses sources</h3><span class="ref">Explicabilité</span></div>
+        <div class="principe"><h3>L'humain décide</h3><span class="ref">Hybridation homme-machine</span></div>
+        <div class="principe"><h3>Il a le droit de ne pas savoir</h3><span class="ref">Droit à l'erreur</span></div>
+        <div class="principe"><h3>Il consomme peu</h3><span class="ref">Sobriété numérique</span></div>
+        <div class="principe"><h3>Vos données restent chez vous</h3><span class="ref">Souveraineté</span></div>
+      </div>
+      <p class="note">Ces principes viennent du livre <i>L'IA des Champs</i>. Pour Aiffel, ce sont des exigences de conception.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-questions">
+    <p class="etiquette">Questions</p>
+    <div class="contenu">
+      <h2 id="s-questions">Questions fréquentes</h2>
+      <div class="faq">
+        <details>
+          <summary>Faut-il changer de logiciel ?</summary>
+          <p>Non. Aiffel travaille avec les logiciels de la ferme. Aujourd'hui Ekylibre et Lexicon ; les autres suivront, dans l'ordre des besoins.</p>
+        </details>
+        <details>
+          <summary>Qu'est-ce qu'une clé d'IA ?</summary>
+          <p>Un accès personnel à un fournisseur d'IA, facturé par lui à l'usage. Elle est obligatoire avec Aiffel Libre. Avec Aiffel en ligne, elle sert seulement à continuer au-delà du crédit inclus. Elle est gardée dans le coffre chiffré, comme les accès aux logiciels.</p>
+        </details>
+        <details>
+          <summary>Aiffel peut-il se tromper ?</summary>
+          <p>Oui, comme toute IA. C'est pour cela qu'il vous redit ce qu'il a compris, qu'il cite ses sources et que rien n'est enregistré sans votre validation. Avant de valider, tout se corrige ou s'annule.</p>
+        </details>
+        <details>
+          <summary>Où sont mes données ?</summary>
+          <p>Dans vos logiciels, là où elles étaient. Aiffel ne garde que ce qu'il faut pour fonctionner : vos réglages et vos accès, chiffrés. L'application d'Aiffel en ligne est hébergée dans l'Union européenne.</p>
+        </details>
+        <details>
+          <summary>Pourquoi Telegram, puis WhatsApp ?</summary>
+          <p>Telegram a une interface ouverte et ne dépend pas de Meta : c'est le canal de l'offre libre. WhatsApp est la messagerie que la plupart des agriculteurs ont déjà : il arrive avec l'offre Pro.</p>
+        </details>
+        <details>
+          <summary>Je suis adhérent d'OSFarm. Que dois-je faire ?</summary>
+          <p>Aiffel en ligne vous sera offert. Les modalités seront précisées au lancement : laissez-nous votre adresse pour être prévenu.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="contact" id="contact" aria-labelledby="s-contact">
+    <h2 id="s-contact">Aiffel arrive. Soyez parmi les premiers.</h2>
+    <p>Agriculteur, CUMA, coopérative, conseiller : écrivez-nous pour essayer Aiffel ou être prévenu du lancement.</p>
+    <a class="bouton plein grand" href="mailto:contact@aiffel.org?subject=Aiffel%20%3A%20me%20pr%C3%A9venir%20du%20lancement">contact@aiffel.org</a>
+  </section>
+
+</main>
+
+<footer class="pied">
+  <div class="page pied-dedans">
+    <a class="marque" href="/" aria-label="Aiffel, accueil">
+      <svg aria-hidden="true"><use href="#signe"/></svg>
+      <span>AIFFEL</span>
+    </a>
+    <p>Solide · Simple · Durable</p>
+    <p>Un commun numérique pour l'agriculture · 2026</p>
+  </div>
+</footer>
+
+</body>
+</html>

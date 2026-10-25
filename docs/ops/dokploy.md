@@ -100,7 +100,40 @@ redéploiements. Pour une sauvegarde, voir §5.
 - **Clé maître** : copie chiffrée hors ligne (gestionnaire de mots de passe de l'équipe).
   Sans elle, les secrets stockés en base deviennent illisibles.
 
-## 6. Dépannage rapide
+## 6. Site vitrine (aiffel.org)
+
+Le site commercial est une page statique (`site/`) servie par nginx sans privilèges. C'est une
+application Dokploy **distincte** de la stack applicative : il se redéploie sans toucher à
+`app.aiffel.org`, et il n'a ni base, ni secret, ni variable d'environnement.
+
+1. **DNS** chez Gandi : aujourd'hui `aiffel.org` et `www.aiffel.org` pointent vers la redirection web
+   de Gandi (`webredir.vip.gandi.net`). Les remplacer par :
+   - `aiffel.org` : enregistrement `A` vers l'IP du serveur (celle de `app.aiffel.org`) ;
+   - `www.aiffel.org` : `CNAME` vers `aiffel.org.` (ou un `A` vers la même IP).
+
+   Désactiver la redirection web Gandi du domaine, sinon elle reprend la main.
+2. **Application** : dans le projet `aiffel`, créer une application de type **Compose**, source
+   GitHub `ekylibre/aiffel`, branche `main`, chemin `docker/compose.site.yml`.
+3. **Domaines** (onglet « Domains ») : service `site`, port `8080`, HTTPS avec Let's Encrypt, pour
+   `aiffel.org` **et** `www.aiffel.org`. nginx redirige `www` vers `aiffel.org` (301).
+4. **Vérifier** :
+   ```bash
+   curl -fsS https://aiffel.org/healthz
+   curl -sI https://www.aiffel.org/ | grep -i location   # https://aiffel.org/
+   ```
+
+Tester en local avant de pousser :
+
+```bash
+docker build -t aiffel-site:local site
+docker run --rm --read-only --tmpfs /tmp -p 127.0.0.1:8089:8080 aiffel-site:local
+# http://127.0.0.1:8089
+```
+
+La page n'exécute aucun script et ne charge aucune ressource tierce (polices hébergées dans
+`site/fonts/`) ; la politique CSP de `site/nginx.conf` l'impose. Garder cette règle en modifiant le site.
+
+## 7. Dépannage rapide
 
 | Symptôme | Piste |
 |---|---|

@@ -1,0 +1,258 @@
+<title>Schéma fonctionnel Aiffel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Big+Shoulders+Display:wght@700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Feuille A4 imprimable posée sur un plan de travail ; la feuille garde toujours ses couleurs papier */
+:root {
+  --plan: #DDE2DA;
+  --ombre: rgba(22, 33, 28, 0.25);
+  --papier: #FFFFFF;
+  --encre: #16211C;
+  --vert: #58AD45;
+  --vert-pale: #E6F2E0;
+  --calcaire: #F1F3EE;
+  --bleu: #245F86;
+  --bleu-pale: #E2ECF2;
+  --lichen: #56655D;
+  --trait: #D3D9D0;
+  --f-titre: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  --f-texte: "Atkinson Hyperlegible", Arial, Helvetica, sans-serif;
+  --f-data: "IBM Plex Mono", "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --plan: #0F1512; --ombre: rgba(0, 0, 0, 0.6); color-scheme: dark; }
+}
+:root[data-theme="dark"] { --plan: #0F1512; --ombre: rgba(0, 0, 0, 0.6); color-scheme: dark; }
+
+@page { size: A4; margin: 0; }
+body { background: var(--plan); margin: 0; }
+.cadre {
+  display: flex; justify-content: center;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+.socle { position: relative; width: 210mm; height: 297mm; }
+.feuille {
+  position: absolute; top: 0; left: 0;
+  width: 210mm; height: 297mm; box-sizing: border-box;
+  padding: 11mm 12mm 10mm;
+  background: var(--papier); color: var(--encre);
+  font-family: var(--f-texte); font-size: 9.6pt; line-height: 1.4;
+  transform-origin: top left;
+  box-shadow: 0 18px 50px -20px var(--ombre);
+  display: flex; flex-direction: column; gap: 4.2mm;
+  overflow: hidden;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.feuille p { margin: 0; }
+.feuille h1, .feuille h2, .feuille h3 { margin: 0; font-family: var(--f-titre); text-wrap: balance; }
+.data { font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+.lab { font-family: var(--f-data); font-size: 7pt; letter-spacing: 0.09em; text-transform: uppercase; color: var(--lichen); }
+
+/* En-tête */
+.tete { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 3mm; border-bottom: 0.4mm solid var(--encre); }
+.marque { display: flex; align-items: center; gap: 2.4mm; }
+.marque svg { width: 10mm; height: 10mm; color: var(--encre); --barre: var(--vert); }
+.marque span { font-family: var(--f-titre); font-weight: 800; font-size: 20pt; letter-spacing: 0.05em; line-height: 1; }
+.titre-support { font-family: var(--f-titre); font-size: 15pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; line-height: 1; }
+
+/* Intro */
+.intro { font-size: 10pt; line-height: 1.4; }
+.intro b { font-weight: 700; }
+
+/* Plan-tour : la grande zone centrale */
+.plan-tour { position: relative; width: 100%; flex: 1; margin-top: 2mm; }
+.silhouette { position: absolute; top: 34mm; left: 50%; transform: translateX(-50%); width: 180mm; height: 160mm; overflow: visible; }
+.silhouette .structure { stroke: var(--encre); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.silhouette .treillis { stroke: #AEB8B0; fill: none; stroke-linecap: round; stroke-width: 0.3; }
+.silhouette .plateforme { fill: var(--encre); }
+.silhouette .sol-ligne { stroke: var(--encre); fill: none; }
+.silhouette .herbe { fill: var(--vert); }
+.silhouette .flux-bas { stroke: var(--vert); fill: none; stroke-width: 0.7; stroke-linecap: round; stroke-linejoin: round; }
+.silhouette .flux-haut { stroke: var(--bleu); fill: none; stroke-width: 0.7; stroke-linecap: round; stroke-linejoin: round; }
+.silhouette text { font-family: var(--f-data); font-size: 2.3px; letter-spacing: 0.25px; text-transform: uppercase; }
+
+.niveau { position: absolute; left: 0; right: 0; display: flex; }
+
+/* Sommet : l'agriculteur */
+.niveau.agri { top: 0; flex-direction: column; align-items: center; gap: 1.2mm; }
+.agri .avatar { width: 14mm; height: 14mm; border-radius: 50%; background: var(--vert); color: var(--encre); display: flex; align-items: center; justify-content: center; }
+.agri .avatar svg { width: 9mm; height: 9mm; }
+.agri .legende { font-family: var(--f-titre); font-weight: 800; font-size: 13pt; text-transform: uppercase; letter-spacing: 0.05em; line-height: 1; }
+.agri .parole { background: var(--vert-pale); border-radius: 2mm; padding: 1.4mm 2.6mm; font-size: 8.4pt; max-width: 82mm; text-align: center; font-style: italic; line-height: 1.3; }
+
+/* Canal : Telegram */
+.niveau.canal { top: 68mm; justify-content: center; }
+.canal .pill { font-family: var(--f-data); font-size: 7.6pt; letter-spacing: 0.09em; text-transform: uppercase; background: var(--bleu); color: var(--papier); padding: 1.1mm 3.6mm; border-radius: 10mm; font-weight: 500; display: inline-flex; align-items: center; gap: 2mm; }
+.canal .pill em { font-style: normal; opacity: 0.65; font-weight: 400; }
+
+/* Milieu : Aiffel */
+.niveau.milieu { top: 101.5mm; justify-content: center; }
+.milieu .plaque { background: var(--papier); border: 0.35mm solid var(--encre); border-radius: 1.6mm; padding: 2.4mm 4mm 2.8mm; display: flex; flex-direction: column; align-items: center; gap: 1.2mm; max-width: 72mm; }
+.milieu h2 { font-family: var(--f-titre); font-size: 28pt; font-weight: 900; letter-spacing: 0.04em; line-height: 1; }
+.milieu .sous { font-size: 8.8pt; text-align: center; line-height: 1.3; }
+.milieu .pieces { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2mm; margin-top: 0.6mm; }
+.milieu .pieces span { font-size: 7.4pt; font-weight: 700; background: var(--vert-pale); color: var(--encre); padding: 0.6mm 2mm; border-radius: 1mm; white-space: nowrap; text-align: center; }
+
+/* Fondations : les outils, distingués par leur seule couleur */
+.niveau.sol { top: 193mm; padding: 0 13mm; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1mm; }
+.sol span { font-size: 8.2pt; font-weight: 700; text-align: center; padding: 1.3mm 1mm; border-radius: 0.8mm; white-space: nowrap; }
+.sol .actif { background: var(--vert); color: var(--encre); }
+.sol .prevu { background: var(--calcaire); border: 0.3mm solid var(--trait); color: var(--encre); font-weight: 400; }
+
+/* Pied */
+.pied { padding-top: 3mm; border-top: 0.4mm solid var(--encre); font-size: 8.6pt; color: var(--lichen); line-height: 1.4; display: grid; grid-template-columns: 1fr auto; gap: 6mm; align-items: center; }
+.pied p { margin: 0; }
+.pied p b { color: var(--encre); }
+.pied .legendes { display: flex; gap: 4mm; font-size: 7pt; font-family: var(--f-data); letter-spacing: 0.08em; text-transform: uppercase; }
+.pied .legendes span { display: inline-flex; align-items: center; gap: 1.4mm; }
+.pied .legendes span::before { content: ""; width: 3mm; height: 3mm; border-radius: 50%; background: var(--vert); }
+.pied .legendes span.prevu::before { background: var(--calcaire); border: 0.4mm solid var(--trait); }
+
+@media print {
+  body { background: var(--papier); }
+  .cadre { padding: 0; display: block; }
+  .socle { width: 210mm !important; height: 297mm !important; }
+  .feuille { transform: none !important; box-shadow: none; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="signe" viewBox="0 0 64 64">
+      <path d="M6 58 L32 7 L58 58" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon points="18.2,33.5 45.8,33.5 48.8,40.5 15.2,40.5" style="fill: var(--barre, #58AD45)"/>
+      <path d="M32 46 L32 58 M24.2 46 L20.6 58 M39.8 46 L43.4 58" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="personne" viewBox="0 0 24 24">
+      <circle cx="12" cy="7.5" r="3.6" fill="currentColor"/>
+      <path d="M3.8 20.6 C 3.8 15.6, 7 13, 12 13 C 17 13, 20.2 15.6, 20.2 20.6 Z" fill="currentColor"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="cadre">
+  <div class="socle" id="socle">
+    <article class="feuille" id="feuille" aria-label="Schéma fonctionnel Aiffel">
+
+      <header class="tete">
+        <div class="marque"><svg aria-hidden="true"><use href="#signe"/></svg><span>AIFFEL</span></div>
+        <p class="titre-support">Schéma fonctionnel</p>
+      </header>
+
+      <p class="intro">
+        <b>Aiffel tient comme une tour.</b> L'agriculteur est au sommet : il parle avec ses mots. Au milieu, Aiffel
+        comprend, vérifie et attend l'accord. La tour repose sur les logiciels de la ferme : Aiffel y range les données
+        au bon endroit et va y chercher ce qu'il faut pour répondre.
+      </p>
+
+      <div class="plan-tour" aria-label="Tour fonctionnelle d'Aiffel">
+        <svg class="silhouette" viewBox="0 0 180 160" aria-hidden="true">
+          <!-- Croisillons : jambes -->
+          <g class="treillis">
+            <path d="M14 158 L48 145 M44 158 L23 145 M23 145 L48 145
+                     M23 145 L53 130 M48 145 L36 130 M36 130 L53 130
+                     M36 130 L57 118 M53 130 L44 118 M44 118 L57 118"/>
+            <path d="M166 158 L132 145 M136 158 L157 145 M157 145 L132 145
+                     M157 145 L127 130 M132 145 L144 130 M144 130 L127 130
+                     M144 130 L123 118 M127 130 L136 118 M136 118 L123 118"/>
+            <!-- Fût entre étage 1 et étage 2 -->
+            <path d="M50 108 L119 83 M130 108 L61 83 M61 83 L119 83 M61 83 L108 58 M119 83 L72 58"/>
+            <!-- Fût entre étage 2 et étage 3 -->
+            <path d="M72 58 L101 37 M108 58 L79 37 M79 37 L101 37 M79 37 L95 16 M101 37 L85 16"/>
+          </g>
+
+          <!-- Profil extérieur, concave comme la tour -->
+          <path class="structure" stroke-width="1.2" d="M14 158 C 28 140, 42 124, 50 108 C 57 90, 66 74, 72 58 C 78 42, 83 28, 85 16 L 87.4 9"/>
+          <path class="structure" stroke-width="1.2" d="M166 158 C 152 140, 138 124, 130 108 C 123 90, 114 74, 108 58 C 102 42, 97 28, 95 16 L 92.6 9"/>
+
+          <!-- Arêtes intérieures des jambes et arche -->
+          <path class="structure" stroke-width="0.8" d="M44 158 C 50 140, 56 124, 60 108.5"/>
+          <path class="structure" stroke-width="0.8" d="M136 158 C 130 140, 124 124, 120 108.5"/>
+          <path class="structure" stroke-width="0.8" d="M54 128 Q 90 103 126 128"/>
+
+          <!-- Plateformes -->
+          <rect class="plateforme" x="44" y="106" width="92" height="3"/>
+          <rect class="plateforme" x="67" y="56.4" width="46" height="2.2"/>
+          <polygon class="herbe" points="68.5,58.6 111.5,58.6 113.6,62.6 66.4,62.6"/>
+          <rect class="plateforme" x="81.5" y="15" width="17" height="1.6"/>
+
+          <!-- Sommet et antenne -->
+          <rect class="plateforme" x="87" y="6.6" width="6" height="2.6" rx="0.4"/>
+          <line class="structure" x1="90" y1="0.6" x2="90" y2="6.6" stroke-width="0.6"/>
+
+          <!-- Sol -->
+          <line class="sol-ligne" x1="6" y1="158.3" x2="174" y2="158.3" stroke-width="0.8"/>
+
+          <!-- Sens des échanges -->
+          <path class="flux-bas" d="M8 24 L8 136 M5.6 132.4 L8 136 L10.4 132.4"/>
+          <text x="0" y="0" transform="translate(12.6 80) rotate(90)" text-anchor="middle" fill="#2C7446">Vous dites · il range</text>
+          <path class="flux-haut" d="M172 136 L172 24 M169.6 27.6 L172 24 L174.4 27.6"/>
+          <text x="0" y="0" transform="translate(167.4 80) rotate(-90)" text-anchor="middle" fill="#245F86">Il répond, sources à l'appui</text>
+        </svg>
+
+        <!-- Sommet : l'agriculteur -->
+        <div class="niveau agri">
+          <div class="avatar"><svg aria-hidden="true"><use href="#personne"/></svg></div>
+          <div class="legende">L'agriculteur</div>
+          <div class="parole">« Bouillie bordelaise sur Vigne du Bas hier après-midi, 5 kilos hectare. »</div>
+        </div>
+
+        <!-- Canal : Telegram -->
+        <div class="niveau canal">
+          <div class="pill">Telegram<em>· web et mobile prévus</em></div>
+        </div>
+
+        <!-- Milieu : Aiffel -->
+        <div class="niveau milieu">
+          <div class="plaque">
+            <h2>AIFFEL</h2>
+            <p class="sous">Il comprend, il vérifie, il attend votre « Valider ».</p>
+            <div class="pieces">
+              <span>Coffre chiffré</span>
+              <span>Sources citées</span>
+              <span>Validation humaine</span>
+              <span>Journal auditable</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fondations : les outils de la ferme -->
+        <div class="niveau sol">
+          <span class="actif">Ekylibre</span><span class="actif">Lexicon</span><span class="prevu">Geofolia</span><span class="prevu">Smag Farmer</span>
+          <span class="prevu">MesParcelles</span><span class="prevu">Isacompta</span><span class="prevu">Lyvre</span><span class="prevu">Vos tableurs Excel</span>
+        </div>
+      </div>
+
+      <footer class="pied">
+        <p><b>Chaque pièce reste à sa place.</b> Les logiciels de la ferme gardent les données ; Aiffel les relie sans
+        les copier. Les accès dorment dans le coffre et ne remontent jamais vers l'IA. Rien n'est enregistré sans
+        votre accord — c'est le contrat non négociable d'Aiffel.</p>
+        <div class="legendes">
+          <span>Branché</span>
+          <span class="prevu">Prévu</span>
+        </div>
+      </footer>
+
+    </article>
+  </div>
+</div>
+
+<script>
+(function () {
+  var socle = document.getElementById('socle');
+  var feuille = document.getElementById('feuille');
+  function ajuster() {
+    var dispo = document.documentElement.clientWidth - 32;
+    var s = Math.min(1, dispo / feuille.offsetWidth);
+    feuille.style.transform = 'scale(' + s + ')';
+    socle.style.width = (feuille.offsetWidth * s) + 'px';
+    socle.style.height = (feuille.offsetHeight * s) + 'px';
+  }
+  ajuster();
+  window.addEventListener('resize', ajuster);
+})();
+</script>

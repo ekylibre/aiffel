@@ -1,0 +1,272 @@
+<title>Fiche Aiffel agriculteurs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Big+Shoulders+Display:wght@700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Feuille A4 imprimable posée sur un plan de travail ; la feuille garde toujours ses couleurs papier */
+:root {
+  --plan: #DDE2DA;
+  --ombre: rgba(22, 33, 28, 0.25);
+  --papier: #FFFFFF;
+  --encre: #16211C;
+  --vert: #58AD45;
+  --vert-pale: #E6F2E0;
+  --calcaire: #F1F3EE;
+  --bleu: #245F86;
+  --bleu-pale: #E2ECF2;
+  --lichen: #56655D;
+  --trait: #D3D9D0;
+  --f-titre: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  --f-texte: "Atkinson Hyperlegible", Arial, Helvetica, sans-serif;
+  --f-data: "IBM Plex Mono", "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --plan: #0F1512; --ombre: rgba(0, 0, 0, 0.6); color-scheme: dark; }
+}
+:root[data-theme="dark"] { --plan: #0F1512; --ombre: rgba(0, 0, 0, 0.6); color-scheme: dark; }
+
+@page { size: A4; margin: 0; }
+body { background: var(--plan); margin: 0; }
+.cadre {
+  display: flex; justify-content: center;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+.socle { position: relative; width: 210mm; height: 297mm; }
+.feuille {
+  position: absolute; top: 0; left: 0;
+  width: 210mm; height: 297mm; box-sizing: border-box;
+  padding: 11mm 12mm 10mm;
+  background: var(--papier); color: var(--encre);
+  font-family: var(--f-texte); font-size: 9.6pt; line-height: 1.4;
+  transform-origin: top left;
+  box-shadow: 0 18px 50px -20px var(--ombre);
+  display: flex; flex-direction: column; gap: 4.2mm;
+  overflow: hidden;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.feuille p { margin: 0; }
+.feuille h1, .feuille h2, .feuille h3 { margin: 0; font-family: var(--f-titre); text-wrap: balance; }
+.data { font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+.lab { font-family: var(--f-data); font-size: 7pt; letter-spacing: 0.09em; text-transform: uppercase; color: var(--lichen); }
+
+/* En-tête */
+.tete { display: flex; justify-content: space-between; align-items: center; padding-bottom: 3mm; border-bottom: 0.4mm solid var(--encre); }
+.marque { display: flex; align-items: center; gap: 2.4mm; }
+.marque svg { width: 10mm; height: 10mm; color: var(--encre); --barre: var(--vert); }
+.marque span { font-family: var(--f-titre); font-weight: 800; font-size: 20pt; letter-spacing: 0.05em; line-height: 1; }
+.devise { font-family: var(--f-data); font-size: 8pt; letter-spacing: 0.12em; text-transform: uppercase; }
+
+/* Accroche */
+.accroche { display: grid; grid-template-columns: 1.35fr 1fr; gap: 7mm; align-items: end; }
+.accroche h1 { font-size: 34pt; font-weight: 900; line-height: 0.93; text-transform: uppercase; }
+.accroche h1 mark { background: linear-gradient(to top, var(--vert) 0 40%, transparent 40%); color: inherit; padding-inline: 0.04em; }
+.chapeau { font-size: 11pt; line-height: 1.38; }
+.chapeau b { display: block; margin-top: 1.6mm; }
+
+/* Le soir */
+.soir { background: var(--calcaire); border-radius: 2.5mm; padding: 3.2mm 4mm; display: grid; grid-template-columns: auto repeat(4, 1fr); gap: 4mm; align-items: center; }
+.soir h2 { font-size: 13pt; font-weight: 800; text-transform: uppercase; line-height: 1; max-width: 26mm; }
+.soir div { border-left: 0.3mm solid var(--trait); padding-left: 3mm; font-size: 8.8pt; line-height: 1.3; }
+.soir div b { display: block; font-size: 9.4pt; }
+
+/* Exemples */
+.exemples { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+.ecran { border: 0.3mm solid var(--trait); border-radius: 4mm; padding: 3.2mm; display: flex; flex-direction: column; gap: 2mm; }
+.ecran-tete { display: flex; justify-content: space-between; align-items: baseline; }
+.ecran-tete h3 { font-size: 13pt; font-weight: 800; text-transform: uppercase; }
+.bulle { border-radius: 3mm; padding: 2mm 2.6mm; font-size: 8.8pt; line-height: 1.35; max-width: 90%; }
+.bulle.moi { align-self: flex-end; background: var(--vert-pale); border-bottom-right-radius: 1mm; }
+.bulle.lui { align-self: flex-start; background: var(--calcaire); border-bottom-left-radius: 1mm; max-width: 100%; width: 100%; box-sizing: border-box; }
+.vocal { display: flex; align-items: center; gap: 1.6mm; font-size: 7pt; color: var(--lichen); margin-bottom: 0.8mm; }
+.onde { display: flex; align-items: center; gap: 0.5mm; height: 3.2mm; }
+.onde i { display: block; width: 0.7mm; border-radius: 0.4mm; background: var(--lichen); }
+.pdf { display: flex; align-items: center; gap: 2mm; }
+.pdf .doc { width: 6.5mm; height: 8mm; border: 0.3mm solid var(--trait); border-radius: 0.8mm; background: var(--papier); display: flex; align-items: flex-end; overflow: hidden; }
+.pdf .doc span { width: 100%; text-align: center; background: var(--encre); color: var(--papier); font-family: var(--f-data); font-size: 5pt; padding: 0.3mm 0; }
+.fiche { margin-top: 1.4mm; border-top: 0.25mm dashed var(--trait); }
+.ligne { display: grid; grid-template-columns: 17mm 1fr auto; gap: 1.6mm; align-items: baseline; padding-block: 0.9mm; border-bottom: 0.25mm dashed var(--trait); font-size: 8.4pt; }
+.ligne b { font-weight: 400; color: var(--lichen); font-size: 7.6pt; }
+.src { font-family: var(--f-data); font-size: 6.4pt; background: var(--bleu-pale); color: var(--bleu); padding: 0.2mm 1.2mm; border-radius: 0.8mm; }
+.ok { color: #2C7446; font-weight: 700; }
+.boutons { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4mm; margin-top: 1.8mm; }
+.boutons span { text-align: center; font-weight: 700; font-size: 8.4pt; padding: 1.2mm; border-radius: 1.6mm; border: 0.3mm solid var(--trait); color: var(--bleu); background: var(--papier); }
+.boutons span.oui { background: var(--vert); border-color: var(--vert); color: var(--encre); }
+.fin { font-size: 8.6pt; margin-top: auto !important; }
+.groupe { display: flex; flex-direction: column; gap: 1mm; }
+.recap p { font-size: 8.4pt; line-height: 1.32; }
+.recap .debut { margin-top: 1.2mm; }
+.kbd { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1mm; }
+.kbd span { text-align: center; font-size: 7.8pt; font-weight: 700; padding: 1.1mm 0.5mm; border-radius: 1.6mm; background: var(--calcaire); color: var(--bleu); white-space: nowrap; }
+.bientot { font-family: var(--f-data); font-size: 6.6pt; letter-spacing: 0.06em; text-transform: uppercase; border: 0.25mm dashed var(--lichen); color: var(--lichen); padding: 0.3mm 1.4mm; border-radius: 0.8mm; }
+
+/* Trois temps */
+.temps { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 0.4mm solid var(--encre); }
+.temps div { display: grid; grid-template-columns: auto 1fr; gap: 0 3mm; padding: 2.6mm 4mm 0 0; }
+.temps div + div { padding-left: 4mm; border-left: 0.3mm solid var(--trait); }
+.temps .n { grid-row: span 2; font-family: var(--f-titre); font-weight: 900; font-size: 28pt; line-height: 0.9; color: var(--vert); }
+.temps h3 { font-family: var(--f-texte); font-size: 10.4pt; font-weight: 700; }
+.temps p { font-size: 8.6pt; color: var(--lichen); line-height: 1.32; }
+
+/* Garanties et logiciels */
+.bas { display: grid; grid-template-columns: 1.2fr 1fr; gap: 7mm; }
+.bas h2 { font-size: 14pt; font-weight: 800; text-transform: uppercase; margin-bottom: 2mm; line-height: 1; }
+.garanties { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.6mm; }
+.garanties li { display: grid; grid-template-columns: 4mm 1fr; font-size: 9pt; line-height: 1.32; }
+.garanties li::before { content: "✓"; color: #2C7446; font-weight: 700; }
+.logiciels { display: grid; gap: 2.4mm; }
+.logiciels .lab { margin-bottom: 1mm; display: block; }
+.puces { display: flex; flex-wrap: wrap; gap: 1.4mm; }
+.puces span { font-size: 8.8pt; font-weight: 700; padding: 0.8mm 2.2mm; border-radius: 1.2mm; }
+.puces.actifs span { background: var(--vert); color: var(--encre); }
+.puces.prevus span { border: 0.3mm solid var(--trait); color: var(--encre); font-weight: 400; }
+
+/* Pied */
+.pied { margin-top: auto; display: grid; grid-template-columns: 1fr 72mm; gap: 6mm; align-items: stretch; padding-top: 3mm; border-top: 0.4mm solid var(--encre); }
+.pied p { font-size: 8.2pt; color: var(--lichen); line-height: 1.38; }
+.pied p b { color: var(--encre); }
+.contact { border: 0.35mm dashed var(--lichen); border-radius: 2mm; padding: 2.4mm 3mm; display: grid; gap: 3.4mm; align-content: start; }
+.contact .champ { border-bottom: 0.3mm solid var(--trait); height: 4.6mm; }
+
+@media print {
+  body { background: var(--papier); }
+  .cadre { padding: 0; display: block; }
+  .socle { width: 210mm !important; height: 297mm !important; }
+  .feuille { transform: none !important; box-shadow: none; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="signe" viewBox="0 0 64 64">
+      <path d="M6 58 L32 7 L58 58" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon points="18.2,33.5 45.8,33.5 48.8,40.5 15.2,40.5" style="fill: var(--barre, #58AD45)"/>
+      <path d="M32 46 L32 58 M24.2 46 L20.6 58 M39.8 46 L43.4 58" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="cadre">
+  <div class="socle" id="socle">
+    <article class="feuille" id="feuille" aria-label="Fiche Aiffel pour les agriculteurs">
+
+      <header class="tete">
+        <div class="marque"><svg aria-hidden="true"><use href="#signe"/></svg><span>AIFFEL</span></div>
+        <p class="devise">Solide · Simple · Durable</p>
+      </header>
+
+      <section class="accroche">
+        <h1>Dites-le une fois. <mark>Aiffel</mark> le range au bon endroit.</h1>
+        <div class="chapeau">
+          <p>Aiffel remplit vos logiciels à votre place. Vous lui parlez sur Telegram, à la voix ou par écrit. Il prépare, il vérifie, et vous validez d'un geste.</p>
+          <b>Plus de ressaisie le soir.</b>
+        </div>
+      </section>
+
+      <section class="soir" aria-label="Ce qu'Aiffel vous évite">
+        <h2>Fini, le soir…</h2>
+        <div><b>La ressaisie</b>du cahier de traitements après la journée</div>
+        <div><b>Les applis en pagaille</b>une pour chaque tâche, chacune son écran</div>
+        <div><b>Les mots de passe</b>oubliés, notés sur un coin de carnet</div>
+        <div><b>Les factures</b>qui s'empilent en attendant d'être saisies</div>
+      </section>
+
+      <section class="exemples" aria-label="Deux exemples">
+        <div class="ecran">
+          <div class="ecran-tete"><h3>Un traitement</h3><span class="lab">Depuis la cabine</span></div>
+          <div class="bulle moi">
+            <div class="vocal" aria-hidden="true"><span class="onde"><i style="height:1.4mm"></i><i style="height:2.8mm"></i><i style="height:2mm"></i><i style="height:3.2mm"></i><i style="height:1.6mm"></i><i style="height:2.6mm"></i><i style="height:1.2mm"></i></span><span class="data">0:11</span></div>
+            Message vocal
+          </div>
+          <div class="bulle lui">🎙️ J'ai compris : « Bouillie bordelaise sur Vigne du Bas hier après-midi, 5 kilos hectare, pendant 2 heures. »</div>
+          <div class="groupe">
+            <div class="bulle lui recap">
+              <p><b>📝 Intervention à valider</b></p>
+              <p>• Pulvérisation</p>
+              <p>• Le 23/10/2026 à 14:00, durée 2 h</p>
+              <p>• Cibles : Vigne du Bas</p>
+              <p>• Intrant : Bouillie bordelaise — 5 kg/ha</p>
+              <p class="debut">✅ BOUILLIE BORDELAISE MANICA N.C. (AMM 2010618) : dose conforme (max 7,5 kg/ha).</p>
+              <p>✅ Délai avant récolte : 21 jours.</p>
+            </div>
+            <div class="kbd"><span>✅ Valider</span><span>✏️ Corriger</span><span>✖️ Annuler</span></div>
+          </div>
+          <p class="fin">Enregistrée dans Ekylibre ✅ (n° 1842).</p>
+        </div>
+
+        <div class="ecran">
+          <div class="ecran-tete"><h3>Une facture</h3><span class="bientot">Bientôt</span></div>
+          <div class="bulle moi">
+            <div class="pdf"><span class="doc" aria-hidden="true"><span>PDF</span></span><span>Facture coop.pdf <span class="lab">ou une photo</span></span></div>
+          </div>
+          <div class="bulle lui">🎙️ J'ai compris : « La facture de la coop pour l'ammonitrate, à payer fin du mois. »</div>
+          <div class="groupe">
+            <div class="bulle lui recap">
+              <p><b>📝 Facture à valider</b></p>
+              <p>• Coopérative du Val, facture du 22/10/2026</p>
+              <p>• Ammonitrate 33,5 — 6 t</p>
+              <p>• 3 528,00 € TTC, échéance le 31/10/2026</p>
+              <p>• Entrée en stock : 6 t</p>
+              <p class="debut">Validez pour enregistrer en compta et en stock.</p>
+            </div>
+            <div class="kbd"><span>✅ Valider</span><span>✏️ Corriger</span><span>✖️ Annuler</span></div>
+          </div>
+          <p class="fin">Enregistrée ✅ Compta et stock à jour, facture rangée.</p>
+        </div>
+      </section>
+
+      <section class="temps" aria-label="Comment ça marche">
+        <div><span class="n">1</span><h3>Vous le dites</h3><p>Un vocal ou un message, avec vos mots. Il vous redit ce qu'il a compris.</p></div>
+        <div><span class="n">2</span><h3>Aiffel prépare</h3><p>Il complète et vérifie : dose, zone non traitée, délai avant récolte.</p></div>
+        <div><span class="n">3</span><h3>Vous validez</h3><p>Un bouton, et c'est enregistré. Avant, tout se corrige ou s'annule.</p></div>
+      </section>
+
+      <section class="bas">
+        <div>
+          <h2>Vos garanties</h2>
+          <ul class="garanties">
+            <li><span>Rien n'est enregistré sans votre « Valider ».</span></li>
+            <li><span>Il dit d'où vient chaque chiffre, et « je ne sais pas » quand il ne sait pas.</span></li>
+            <li><span>Vos données restent dans vos logiciels, hébergées en Europe.</span></li>
+            <li><span>Vos accès sont gardés dans un coffre chiffré. L'IA ne les voit jamais.</span></li>
+            <li><span>Logiciel ouvert et sobre : rien à acheter, vous partez quand vous voulez.</span></li>
+          </ul>
+        </div>
+        <div class="logiciels">
+          <h2>Avec vos logiciels</h2>
+          <div><span class="lab">Dès aujourd'hui</span><div class="puces actifs"><span>Ekylibre</span><span>Lexicon</span></div></div>
+          <div><span class="lab">Prévu</span><div class="puces prevus"><span>Geofolia</span><span>Smag Farmer</span><span>MesParcelles</span><span>Isacompta</span><span>Lyvre</span><span>Vos tableurs Excel</span></div></div>
+          <p class="lab" style="text-transform:none; letter-spacing:0; font-family: var(--f-texte); font-size: 8.4pt;">Il vous suffit d'un téléphone avec Telegram.</p>
+        </div>
+      </section>
+
+      <footer class="pied">
+        <p><b>Aiffel relie vos outils comme la charpente de la tour Eiffel relie ses pièces : une structure solide, simple et durable.</b> Logiciel ouvert, frugal, hébergé en Europe. En test aujourd'hui : enregistrement des interventions et questions sur vos données, avec Ekylibre et Lexicon.</p>
+        <div class="contact">
+          <span class="lab">Votre contact pour essayer Aiffel</span>
+          <div class="champ"></div>
+          <div class="champ"></div>
+        </div>
+      </footer>
+
+    </article>
+  </div>
+</div>
+
+<script>
+(function () {
+  var socle = document.getElementById('socle');
+  var feuille = document.getElementById('feuille');
+  function ajuster() {
+    var dispo = document.documentElement.clientWidth - 32;
+    var s = Math.min(1, dispo / feuille.offsetWidth);
+    feuille.style.transform = 'scale(' + s + ')';
+    socle.style.width = (feuille.offsetWidth * s) + 'px';
+    socle.style.height = (feuille.offsetHeight * s) + 'px';
+  }
+  ajuster();
+  window.addEventListener('resize', ajuster);
+})();
+</script>

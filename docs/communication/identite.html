@@ -1,0 +1,810 @@
+<title>Aiffel, identité et concept</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Carnet de plaine : un rail d'étiquettes à gauche comme les colonnes d'un registre, le contenu à droite ; l'audace tient au titre et au signe */
+:root {
+  --sol: #F1F3EE;
+  --surface: #FBFCF8;
+  --encre: #16211C;
+  --lichen: #56655D;
+  --trait: #D3D9D0;
+  --vert: #58AD45;
+  --sur-vert: #16211C;
+  --bleu: #245F86;
+  --bleu-fond: #E2ECF2;
+  --bulle-moi: #DCEAD2;
+  --ok: #2C7446;
+  --f-titre: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-texte: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --pas: clamp(56px, 9vw, 112px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sol: #0F1512; --surface: #161E1A; --encre: #E5EAE3; --lichen: #9BA9A1; --trait: #29342E;
+    --vert: #6CBF5A; --sur-vert: #16211C; --bleu: #8BBEE0; --bleu-fond: #182A36;
+    --bulle-moi: #21331E; --ok: #6CC08A; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sol: #0F1512; --surface: #161E1A; --encre: #E5EAE3; --lichen: #9BA9A1; --trait: #29342E;
+  --vert: #6CBF5A; --sur-vert: #16211C; --bleu: #8BBEE0; --bleu-fond: #182A36;
+  --bulle-moi: #21331E; --ok: #6CC08A; color-scheme: dark;
+}
+
+body {
+  background: var(--sol);
+  color: var(--encre);
+  font-family: var(--f-texte);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 80px;
+}
+a { color: var(--bleu); text-underline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--bleu); outline-offset: 3px; border-radius: 2px; }
+h1, h2, h3 { font-family: var(--f-titre); line-height: 0.95; text-wrap: balance; margin: 0; }
+p { margin: 0; }
+.data { font-family: var(--f-data); font-size: 0.82em; font-variant-numeric: tabular-nums; }
+.etiquette {
+  font-family: var(--f-data);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lichen);
+}
+
+/* En-tête */
+.entete { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.marque { display: flex; align-items: center; gap: 12px; color: var(--encre); text-decoration: none; }
+.marque svg { width: 40px; height: 40px; }
+.marque span { font-family: var(--f-titre); font-weight: 800; font-size: 28px; letter-spacing: 0.05em; }
+.statut { display: inline-flex; align-items: center; gap: 8px; }
+.statut::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--vert); box-shadow: 0 0 0 3px color-mix(in srgb, var(--vert) 30%, transparent); }
+
+/* Ouverture */
+.ouverture {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: clamp(32px, 6vw, 80px);
+  align-items: center;
+  padding-block: clamp(48px, 8vw, 96px) var(--pas);
+  border-bottom: 1px solid var(--trait);
+}
+.ouverture h1 {
+  font-size: clamp(54px, 9.5vw, 128px);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.005em;
+}
+.ouverture h1 mark {
+  background: linear-gradient(to top, var(--vert) 0 42%, transparent 42%);
+  color: inherit;
+  padding-inline: 0.04em;
+}
+.chapeau { margin-top: 28px; max-width: 34em; font-size: 19px; color: var(--encre); }
+.chapeau + .chapeau { margin-top: 12px; color: var(--lichen); font-size: 17px; }
+
+/* Conversation d'exemple */
+.telephone {
+  margin: 0;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--trait);
+  border-radius: 28px;
+  padding: 18px 16px 20px;
+  max-width: 400px;
+  width: 100%;
+  justify-self: end;
+  box-shadow: 0 24px 60px -30px color-mix(in srgb, var(--encre) 45%, transparent);
+}
+.telephone-tete { display: flex; align-items: center; gap: 10px; padding: 0 4px 14px; border-bottom: 1px solid var(--trait); margin-bottom: 16px; }
+.telephone-tete svg { width: 30px; height: 30px; flex: none; }
+.telephone-tete strong { display: block; font-size: 15px; line-height: 1.2; }
+.telephone-tete small { display: block; color: var(--lichen); font-size: 12px; }
+.fil { display: flex; flex-direction: column; gap: 10px; }
+.bulle {
+  max-width: 88%;
+  padding: 10px 13px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.fil > * { animation: arrive 0.45s ease-out both; }
+.fil > *:nth-child(2) { animation-delay: 0.35s; }
+.fil > *:nth-child(3) { animation-delay: 0.7s; }
+.fil > *:nth-child(4) { animation-delay: 1.05s; }
+.fil > *:nth-child(5) { animation-delay: 1.4s; }
+.groupe { display: flex; flex-direction: column; gap: 4px; align-self: flex-start; max-width: 94%; }
+.groupe .bulle { max-width: 100%; }
+.recap p { margin: 0; }
+.recap .ctl { font-size: 14px; }
+.recap .debut { margin-top: 8px; }
+.discret { display: block; color: var(--lichen); font-size: 13px; }
+.kbd { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.kbd.un { grid-template-columns: minmax(0, 1fr); }
+.kbd span { text-align: center; font-size: 13px; font-weight: 700; padding: 7px 4px; border-radius: 8px; background: color-mix(in srgb, var(--encre) 7%, var(--surface)); color: var(--bleu); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.galerie { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 32px 24px; }
+.cas { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.cas-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.cas-tete h3 { font-family: var(--f-texte); font-weight: 700; font-size: 18px; line-height: 1.3; }
+.cas .telephone { max-width: none; justify-self: stretch; border-radius: 22px; }
+.dispo { font-family: var(--f-data); font-size: 11px; padding: 2px 7px; border-radius: 4px; background: var(--vert); color: var(--sur-vert); white-space: nowrap; }
+.photo { display: block; width: 180px; max-width: 100%; aspect-ratio: 4 / 3; border-radius: 10px; margin-bottom: 6px;
+  background:
+    radial-gradient(circle at 30% 38%, #C9B23A 0 7px, transparent 8px),
+    radial-gradient(circle at 58% 55%, #C9B23A 0 9px, transparent 10px),
+    radial-gradient(circle at 70% 28%, #C9B23A 0 5px, transparent 6px),
+    linear-gradient(135deg, #6E9F4B, #3F7A35); }
+.bulle.moi { align-self: flex-end; background: var(--bulle-moi); border-bottom-right-radius: 4px; }
+.bulle.lui { align-self: flex-start; background: var(--sol); border: 1px solid var(--trait); border-bottom-left-radius: 4px; }
+.vocal { display: flex; align-items: center; gap: 8px; color: var(--lichen); font-size: 12px; margin-bottom: 4px; }
+.onde { display: flex; align-items: center; gap: 2px; height: 16px; }
+.onde i { display: block; width: 3px; border-radius: 2px; background: var(--lichen); }
+.fiche { margin-top: 8px; display: grid; gap: 0; border-top: 1px dashed var(--trait); }
+.ligne { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline; padding-block: 6px; border-bottom: 1px dashed var(--trait); font-size: 14px; }
+.ligne b { font-weight: 400; color: var(--lichen); font-size: 13px; }
+.ligne span { min-width: 0; }
+.source { font-family: var(--f-data); font-size: 10.5px; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 4px; background: var(--bleu-fond); color: var(--bleu); white-space: nowrap; }
+.boutons { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+.boutons span { text-align: center; font-size: 14px; font-weight: 700; padding: 8px; border-radius: 10px; border: 1px solid var(--trait); color: var(--bleu); background: var(--surface); }
+.boutons span.oui { background: var(--vert); color: var(--sur-vert); border-color: var(--vert); }
+.coche { color: var(--ok); font-weight: 700; }
+.note-exemple { margin-top: 14px; text-align: center; }
+@keyframes arrive { from { opacity: 0.001; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Sections en registre */
+.section {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 24px clamp(24px, 4vw, 56px);
+  padding-block: var(--pas);
+  border-bottom: 1px solid var(--trait);
+}
+.section > .etiquette { padding-top: 10px; }
+.section h2 { font-size: clamp(36px, 5vw, 60px); font-weight: 800; text-transform: uppercase; margin-bottom: 28px; max-width: 18ch; }
+.contenu { min-width: 0; }
+
+.promesse {
+  font-family: var(--f-titre);
+  font-weight: 600;
+  font-size: clamp(30px, 4.2vw, 50px);
+  line-height: 1.08;
+  text-wrap: balance;
+  max-width: 24ch;
+}
+.promesse em { font-style: normal; box-shadow: inset 0 -0.32em 0 var(--vert); }
+
+.colonnes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+.colonnes h3, .principe h3, .etape h3 { font-family: var(--f-texte); font-weight: 700; font-size: 18px; line-height: 1.3; }
+.liste { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 14px; }
+.liste li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; color: var(--encre); }
+.liste li::before { font-family: var(--f-data); font-size: 14px; padding-top: 2px; }
+.liste.est li::before { content: "+"; color: var(--ok); font-weight: 500; }
+.liste.nest li::before { content: "×"; color: var(--lichen); }
+.liste li span { color: var(--lichen); display: block; font-size: 15px; }
+
+.etapes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 2px solid var(--encre); }
+.etape { padding: 20px 24px 8px 0; display: grid; gap: 10px; align-content: start; }
+.etape + .etape { padding-left: 24px; border-left: 1px solid var(--trait); }
+.etape .num { font-family: var(--f-titre); font-weight: 900; font-size: 56px; line-height: 1; color: var(--vert); -webkit-text-stroke: 1px color-mix(in srgb, var(--encre) 25%, transparent); }
+.etape p { color: var(--lichen); font-size: 16px; }
+
+.principes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0; border-top: 1px solid var(--trait); }
+.principe { padding: 22px 24px 22px 0; border-bottom: 1px solid var(--trait); display: grid; gap: 8px; align-content: start; }
+.principe p { color: var(--lichen); font-size: 16px; }
+.principe .ref { font-family: var(--f-data); font-size: 11.5px; color: var(--bleu); letter-spacing: 0.02em; }
+.livre { margin-top: 24px; color: var(--lichen); font-size: 15px; max-width: 60ch; }
+
+.reseau { width: 100%; overflow-x: auto; }
+.reseau table { width: 100%; border-collapse: collapse; min-width: 560px; font-size: 16px; }
+.reseau th { text-align: left; font-weight: 400; padding: 0 16px 10px 0; border-bottom: 2px solid var(--encre); }
+.reseau td { padding: 14px 16px 14px 0; border-bottom: 1px solid var(--trait); vertical-align: top; }
+.reseau td:first-child { font-weight: 700; white-space: nowrap; }
+.reseau td:nth-child(2) { color: var(--lichen); }
+.reseau tr.groupe td { font-family: var(--f-data); font-weight: 500; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lichen); padding-top: 26px; padding-bottom: 8px; border-bottom: 1px solid var(--trait); }
+.reseau tbody tr.groupe:first-child td { padding-top: 14px; }
+.acces { font-family: var(--f-data); font-size: 12px; white-space: nowrap; }
+.acces.ecrit { color: var(--sur-vert); background: var(--vert); padding: 2px 7px; border-radius: 4px; }
+.acces.lit { color: var(--bleu); background: var(--bleu-fond); padding: 2px 7px; border-radius: 4px; }
+.acces.bientot { color: var(--lichen); border: 1px dashed var(--lichen); padding: 1px 6px; border-radius: 4px; }
+.feuille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; margin-top: 40px; }
+.feuille h3 { font-family: var(--f-data); font-weight: 500; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lichen); margin-bottom: 10px; }
+.feuille ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+
+/* Identité */
+.nom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 40px; align-items: center; }
+.nom p + p { margin-top: 14px; }
+.nom .proposition { margin-bottom: 12px; display: inline-block; }
+.declinaisons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tuile { border-radius: 14px; padding: 24px 18px; display: grid; gap: 14px; justify-items: center; align-content: center; min-height: 170px; border: 1px solid var(--trait); }
+.tuile .mot { font-family: var(--f-titre); font-weight: 800; font-size: 30px; letter-spacing: 0.05em; line-height: 1; }
+.tuile svg { width: 64px; height: 64px; }
+.tuile.clair { background: #FBFCF8; color: #16211C; --barre: #58AD45; }
+.tuile.sombre { background: #16211C; color: #F1F3EE; --barre: #6CBF5A; border-color: #16211C; }
+.tuile.vert { background: #58AD45; color: #16211C; --barre: #16211C; border-color: #58AD45; }
+.tuile.mono { background: var(--surface); color: var(--encre); --barre: var(--encre); }
+.tuile .etiquette { color: inherit; opacity: 0.7; font-size: 11px; }
+.petits { display: flex; align-items: end; gap: 14px; }
+.petits svg { color: var(--encre); --barre: var(--vert); }
+
+.anatomie { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; align-items: center; margin-top: 56px; }
+.anatomie svg { width: 100%; max-width: 220px; height: auto; color: var(--encre); --barre: var(--vert); }
+.anatomie dl { margin: 0; display: grid; gap: 14px; }
+.anatomie dt { font-weight: 700; }
+.anatomie dd { margin: 2px 0 0; color: var(--lichen); font-size: 16px; }
+
+.sous-titre { font-family: var(--f-titre); font-size: 30px; font-weight: 800; text-transform: uppercase; margin: 64px 0 20px; }
+.palette { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr; gap: 10px; }
+.teinte { border-radius: 12px; overflow: hidden; border: 1px solid var(--trait); background: var(--surface); display: grid; grid-template-rows: 120px auto; min-width: 0; }
+.teinte .aplat { display: block; }
+.teinte div { padding: 12px 12px 14px; display: grid; gap: 2px; }
+.teinte strong { font-size: 15px; line-height: 1.25; }
+.teinte .data { color: var(--lichen); }
+.teinte p { font-size: 13px; color: var(--lichen); line-height: 1.4; margin-top: 4px; }
+
+.typos { display: grid; gap: 0; border-top: 1px solid var(--trait); }
+.typo { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; padding-block: 22px; border-bottom: 1px solid var(--trait); align-items: baseline; }
+.typo .nom-typo { display: grid; gap: 4px; }
+.typo .nom-typo strong { font-size: 15px; }
+.typo .nom-typo span { color: var(--lichen); font-size: 14px; line-height: 1.4; }
+.spec-titre { font-family: var(--f-titre); font-weight: 900; font-size: clamp(36px, 5vw, 56px); text-transform: uppercase; line-height: 1; }
+.spec-texte { font-size: 20px; max-width: 34em; }
+.spec-data { font-family: var(--f-data); font-size: 17px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.ton { display: grid; gap: 0; border-top: 2px solid var(--encre); }
+.ton-tete, .ton-ligne { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.ton-tete { padding-block: 10px; border-bottom: 1px solid var(--trait); }
+.ton-ligne { padding-block: 16px; border-bottom: 1px solid var(--trait); }
+.ton-ligne p:first-child { font-weight: 700; }
+.ton-ligne p:last-child { color: var(--lichen); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--lichen) 60%, transparent); }
+.ton-ligne .pourquoi { display: block; text-decoration: none; font-size: 14px; margin-top: 4px; font-weight: 400; color: var(--lichen); }
+
+.constat { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 2px solid var(--encre); }
+.symptome { padding: 20px 20px 20px 0; display: grid; gap: 8px; align-content: start; }
+.symptome + .symptome { padding-left: 20px; border-left: 1px solid var(--trait); }
+.symptome strong { font-family: var(--f-titre); font-weight: 800; font-size: 26px; line-height: 1.05; text-transform: uppercase; }
+.symptome p { color: var(--lichen); font-size: 15px; }
+.reponse { margin-top: 36px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.reponse div { display: grid; gap: 6px; align-content: start; }
+.reponse b { display: inline-block; width: fit-content; background: var(--vert); color: var(--sur-vert); font-family: var(--f-titre); font-weight: 800; font-size: 22px; text-transform: uppercase; padding: 2px 10px; border-radius: 4px; }
+.reponse p { font-size: 16px; }
+.intro { max-width: 60ch; margin-bottom: 32px; font-size: 18px; }
+@media (max-width: 900px) {
+  .constat { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .symptome:nth-child(3) { padding-left: 0; border-left: 0; }
+  .symptome:nth-child(n+3) { border-top: 1px solid var(--trait); }
+}
+@media (max-width: 560px) {
+  .constat, .reponse { grid-template-columns: minmax(0, 1fr); }
+  .symptome, .symptome + .symptome { padding: 16px 0; border-left: 0; border-top: 1px solid var(--trait); }
+  .symptome:first-child { border-top: 0; }
+}
+
+.exemple { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 6vw, 72px); align-items: center; }
+.exemple .telephone { justify-self: start; }
+.exemple-texte { display: grid; gap: 16px; align-content: start; }
+.exemple-texte h2 { margin-bottom: 4px; }
+.exemple-texte p { color: var(--lichen); max-width: 46ch; }
+.exemple-texte .liste { margin-top: 4px; }
+.piece { display: flex; align-items: center; gap: 10px; }
+.piece .doc { flex: none; width: 34px; height: 42px; border-radius: 4px; background: var(--surface); border: 1px solid var(--trait); display: grid; align-items: end; overflow: hidden; }
+.piece .doc span { display: block; text-align: center; font-family: var(--f-data); font-size: 9px; font-weight: 500; letter-spacing: 0.05em; background: var(--encre); color: var(--sol); padding: 2px 0; }
+.piece strong { display: block; font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+.piece small { display: block; color: var(--lichen); font-size: 12px; }
+.engagements { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(28px, 4vw, 56px); }
+.engagement { border-top: 2px solid var(--encre); padding-top: 18px; display: grid; gap: 14px; align-content: start; }
+.engagement h3 { font-family: var(--f-titre); font-weight: 900; font-size: clamp(42px, 5.5vw, 68px); text-transform: uppercase; line-height: 0.95; }
+.engagement h3 span { box-shadow: inset 0 -0.26em 0 var(--vert); }
+.engagement .accroche { font-size: 18px; font-weight: 700; max-width: 32ch; }
+.engagement .liste { margin-top: 0; }
+@media (max-width: 900px) {
+  .exemple { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .engagements { grid-template-columns: minmax(0, 1fr); }
+}
+
+.pied { padding-block: 40px 0; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--lichen); font-size: 14px; }
+
+@media (max-width: 900px) {
+  .ouverture { grid-template-columns: minmax(0, 1fr); }
+  .telephone { justify-self: start; }
+  .palette { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .palette .teinte:first-child { grid-column: 1 / -1; }
+  .nom { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .section { grid-template-columns: minmax(0, 1fr); }
+  .section > .etiquette { padding-top: 0; }
+  .colonnes, .feuille { grid-template-columns: minmax(0, 1fr); }
+  .etapes { grid-template-columns: minmax(0, 1fr); }
+  .etape, .etape + .etape { padding: 18px 0; border-left: 0; border-bottom: 1px solid var(--trait); }
+  .anatomie { grid-template-columns: minmax(0, 1fr); }
+  .typo { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .ton-tete, .ton-ligne { gap: 14px; }
+}
+@media (max-width: 440px) {
+  body { font-size: 16px; }
+  .declinaisons { grid-template-columns: minmax(0, 1fr); }
+  .ton-tete, .ton-ligne { grid-template-columns: minmax(0, 1fr); }
+  .ton-tete p:last-child { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fil > * { animation: none; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="signe" viewBox="0 0 64 64">
+      <path d="M6 58 L32 7 L58 58" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon points="18.2,33.5 45.8,33.5 48.8,40.5 15.2,40.5" style="fill: var(--barre, #58AD45)"/>
+      <path d="M32 46 L32 58 M24.2 46 L20.6 58 M39.8 46 L43.4 58" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="signe-petit" viewBox="0 0 64 64">
+      <path d="M8 58 L32 6 L56 58" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon points="17,34 47,34 51,43 13,43" style="fill: var(--barre, #58AD45)"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="page">
+
+  <header class="entete">
+    <a class="marque" href="#haut" id="haut" aria-label="Aiffel">
+      <svg aria-hidden="true"><use href="#signe"/></svg>
+      <span>AIFFEL</span>
+    </a>
+    <p class="etiquette statut">Phase 1 en construction · Telegram · Ekylibre + Lexicon</p>
+  </header>
+
+  <section class="ouverture" aria-labelledby="titre">
+    <div>
+      <h1 id="titre">Dites-le une fois. <mark>Aiffel</mark> le range au bon endroit.</h1>
+      <p class="chapeau">Aiffel est un assistant conversationnel pour l'exploitation agricole. On lui parle sur Telegram, à la voix ou par écrit. Il consulte et met à jour les logiciels déjà en place sur la ferme.</p>
+      <p class="chapeau">Il ne remplace aucun de ces logiciels, et il n'écrit rien sans votre accord.</p>
+    </div>
+
+    <figure class="telephone" aria-label="Exemple de conversation avec Aiffel sur Telegram">
+      <div class="telephone-tete">
+        <svg aria-hidden="true" style="--barre: var(--vert); color: var(--encre)"><use href="#signe"/></svg>
+        <div><strong>Aiffel</strong><small>Domaine des Combes</small></div>
+      </div>
+      <div class="fil">
+        <div class="bulle moi">
+          <div class="vocal" aria-hidden="true">
+            <span class="onde"><i style="height:6px"></i><i style="height:12px"></i><i style="height:9px"></i><i style="height:15px"></i><i style="height:7px"></i><i style="height:13px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:11px"></i><i style="height:8px"></i></span>
+            <span class="data">0:11</span>
+          </div>
+          Message vocal
+        </div>
+        <div class="bulle lui">🎙️ J'ai compris : « Bouillie bordelaise sur Vigne du Bas hier après-midi, 5 kilos hectare, pendant 2 heures. »<span class="discret">(Si c'est faux, écrivez-moi la correction.)</span></div>
+        <div class="bulle lui">C'est noté. L'intervention est prête à valider.</div>
+        <div class="groupe">
+          <div class="bulle lui recap">
+            <p><strong>📝 Intervention à valider</strong></p>
+            <p>• Pulvérisation</p>
+            <p>• Le 23/10/2026 à 14:00, durée 2 h</p>
+            <p>• Cibles : Vigne du Bas</p>
+            <p>• Intrant : Bouillie bordelaise — 5 kg/ha</p>
+            <p>• Matériel : Pulvérisateur traîné</p>
+            <p class="ctl debut">✅ BOUILLIE BORDELAISE MANICA N.C. (AMM 2010618) : dose conforme (max 7,5 kg/ha).</p>
+            <p class="ctl">✅ Délai avant récolte : 21 jours.</p>
+            <p class="ctl">✅ Zone non traitée près de l'eau : 5 m.</p>
+            <p class="ctl debut">Validez pour enregistrer dans Ekylibre.</p>
+          </div>
+          <div class="kbd" aria-hidden="true"><span>✅ Valider</span><span>✏️ Corriger</span><span>✖️ Annuler</span></div>
+        </div>
+        <div class="groupe">
+          <div class="bulle lui">Enregistrée dans Ekylibre ✅ (n° 1842).</div>
+          <div class="kbd un" aria-hidden="true"><span>Voir dans Ekylibre ↗</span></div>
+        </div>
+      </div>
+      <figcaption class="etiquette note-exemple">Format réel des messages · ferme, doses et délais fictifs</figcaption>
+    </figure>
+  </section>
+
+  <section class="section" aria-labelledby="s-terrain">
+    <p class="etiquette">Sur le terrain</p>
+    <div class="contenu">
+      <h2 id="s-terrain">Ce qu'on lui dit vraiment</h2>
+      <p class="intro">Aiffel est testé sur un corpus de 267 phrases d'agriculteurs, telles qu'elles sont dites : incomplètes, avec les noms de parcelles de la ferme, entre deux chantiers. Voici quatre situations courantes et ce qu'il répond aujourd'hui.</p>
+      <div class="galerie">
+
+        <div class="cas">
+          <div class="cas-tete"><h3>Une phrase incomplète</h3><span class="dispo">Disponible</span></div>
+          <figure class="telephone" aria-label="Aiffel demande les informations manquantes pour une insémination">
+            <div class="fil">
+              <div class="bulle moi">Insémination sur Marguerite</div>
+              <div class="bulle lui">C'était quand, et combien de temps ?</div>
+              <div class="bulle moi">Ce matin 7 h 30, un quart d'heure</div>
+              <div class="groupe">
+                <div class="bulle lui recap">
+                  <p><strong>📝 Intervention à valider</strong></p>
+                  <p>• Insémination</p>
+                  <p>• Le 24/10/2026 à 07:30, durée 15 min</p>
+                  <p>• Cibles : Marguerite</p>
+                  <p class="ctl debut">Validez pour enregistrer dans Ekylibre.</p>
+                </div>
+                <div class="kbd" aria-hidden="true"><span>✅ Valider</span><span>✏️ Corriger</span><span>✖️ Annuler</span></div>
+              </div>
+            </div>
+          </figure>
+        </div>
+
+        <div class="cas">
+          <div class="cas-tete"><h3>Une question de cumul</h3><span class="dispo">Disponible</span></div>
+          <figure class="telephone" aria-label="Aiffel calcule l'azote apporté sur les blés">
+            <div class="fil">
+              <div class="bulle moi">Combien d'azote sur mes blés ?</div>
+              <div class="bulle lui recap">
+                <p>Blé tendre, campagne 2026 : 168 unités d'azote par hectare en moyenne, sur 42,5 ha et 3 passages.</p>
+                <p class="ctl debut">• Pré du Moulin (18,2 ha) : 175 u/ha</p>
+                <p class="ctl">• Bel Air (24,3 ha) : 163 u/ha</p>
+                <p class="ctl debut discret">Source : Ekylibre, interventions réalisées ; calcul Aiffel.</p>
+              </div>
+            </div>
+          </figure>
+        </div>
+
+        <div class="cas">
+          <div class="cas-tete"><h3>Le point de la veille</h3><span class="dispo">Disponible</span></div>
+          <figure class="telephone" aria-label="Aiffel liste les interventions de la veille">
+            <div class="fil">
+              <div class="bulle moi">Qu'est-ce que j'ai fait hier ?</div>
+              <div class="bulle lui recap">
+                <p>Hier, 23/10, trois interventions :</p>
+                <p class="ctl debut">• Pulvérisation sur Vigne du Bas, 2 h</p>
+                <p class="ctl">• Labour sur Cantemerle, 3 h</p>
+                <p class="ctl">• Déchaumage sur La Renanbrie, 1 h 30</p>
+                <p class="ctl debut discret">Source : Ekylibre, interventions réalisées.</p>
+              </div>
+            </div>
+          </figure>
+        </div>
+
+        <div class="cas">
+          <div class="cas-tete"><h3>Quand il ne sait pas</h3><span class="dispo">Disponible</span></div>
+          <figure class="telephone" aria-label="Aiffel indique qu'il ne sait pas encore analyser les photos">
+            <div class="fil">
+              <div class="bulle moi"><span class="photo" role="img" aria-label="Photo d'une feuille tachée"></span>C'est quoi ces taches ?</div>
+              <div class="bulle lui">Je ne sais pas encore analyser les photos. Décrivez-moi ce que vous voyez.</div>
+              <div class="bulle moi">Des taches jaunes sur le dessus des feuilles, sur Vigne du Bas</div>
+              <div class="bulle lui">Ça peut évoquer le mildiou, mais je ne peux pas le confirmer. Regardez si un duvet blanc apparaît sous la feuille, et demandez l'avis de votre conseiller.</div>
+            </div>
+          </figure>
+        </div>
+
+      </div>
+      <p class="livre">Phrases du corpus de test, réponses au format réel d'Aiffel. Ferme, parcelles et chiffres fictifs.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-facture">
+    <p class="etiquette">Bientôt</p>
+    <div class="contenu exemple">
+      <figure class="telephone" aria-label="Exemple de saisie de facture avec Aiffel sur Telegram">
+        <div class="telephone-tete">
+          <svg aria-hidden="true" style="--barre: var(--vert); color: var(--encre)"><use href="#signe"/></svg>
+          <div><strong>Aiffel</strong><small>Domaine des Combes</small></div>
+        </div>
+        <div class="fil">
+          <div class="bulle moi">
+            <div class="piece">
+              <span class="doc" aria-hidden="true"><span>PDF</span></span>
+              <div><strong>Facture_cooperative_oct.pdf</strong><small>1 page · 214 Ko</small></div>
+            </div>
+          </div>
+          <div class="bulle moi">
+            <div class="vocal" aria-hidden="true">
+              <span class="onde"><i style="height:8px"></i><i style="height:14px"></i><i style="height:6px"></i><i style="height:12px"></i><i style="height:15px"></i><i style="height:9px"></i><i style="height:5px"></i><i style="height:11px"></i></span>
+              <span class="data">0:09</span>
+            </div>
+            Message vocal
+          </div>
+          <div class="bulle lui">🎙️ J'ai compris : « La facture de la coop pour l'ammonitrate, à payer fin du mois. »<span class="discret">(Si c'est faux, écrivez-moi la correction.)</span></div>
+          <div class="groupe">
+            <div class="bulle lui recap">
+              <p><strong>📝 Facture à valider</strong></p>
+              <p>• Coopérative du Val, facture du 22/10/2026</p>
+              <p>• Ammonitrate 33,5 — 6 t</p>
+              <p>• 2 940,00 € HT, 3 528,00 € TTC</p>
+              <p>• Échéance : 31/10/2026</p>
+              <p>• Entrée en stock : 6 t</p>
+              <p class="ctl debut">Validez pour enregistrer dans Lyvre et Ekylibre.</p>
+            </div>
+            <div class="kbd" aria-hidden="true"><span>✅ Valider</span><span>✏️ Corriger</span><span>✖️ Annuler</span></div>
+          </div>
+          <div class="bulle lui">Enregistrée dans Lyvre ✅ (n° 2026-0412). Stock mis à jour dans Ekylibre.</div>
+        </div>
+        <figcaption class="etiquette note-exemple">Projection · comptabilité avec Lyvre, phase 3</figcaption>
+      </figure>
+      <div class="exemple-texte">
+        <h2 id="s-facture">Une facture, même logique</h2>
+        <p>Le PDF reçu par mail ou une photo de la facture papier, et une phrase au vocal. Aiffel lira le document et préparera à la fois l'écriture comptable et l'entrée en stock.</p>
+        <ul class="liste est">
+          <li><p>Le même garde-fou<span>Rien n'est enregistré sans votre Valider.</span></p></li>
+          <li><p>Une seule validation pour deux logiciels<span>La comptabilité et le stock sont à jour en même temps.</span></p></li>
+          <li><p>Le justificatif suit l'écriture<span>Le document est rangé avec l'écriture, prêt pour le comptable.</span></p></li>
+        </ul>
+        <p>Prévu avec la comptabilité Lyvre. Aujourd'hui, Aiffel répond honnêtement qu'il ne sait pas encore lire les photos ni les PDF.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-constat">
+    <p class="etiquette">Le constat</p>
+    <div class="contenu">
+      <h2 id="s-constat">L'IA fait fleurir les outils, et la ferme s'y perd</h2>
+      <p class="intro">Chaque mois apporte une nouvelle application, souvent dopée à l'IA. Les anciennes restent, parce qu'elles portent l'historique. Au lieu de simplifier, cet empilement rend l'ensemble instable.</p>
+      <div class="constat">
+        <div class="symptome"><strong>Trop d'applications nouvelles</strong><p>Chacune règle un petit problème, avec son compte, son écran et sa façon de faire.</p></div>
+        <div class="symptome"><strong>Trop d'anciennes</strong><p>On ne peut pas les quitter : elles gardent des années de données et d'obligations.</p></div>
+        <div class="symptome"><strong>Des données partout</strong><p>Les informations de la ferme et de la famille se dispersent chez des dizaines de prestataires.</p></div>
+        <div class="symptome"><strong>Des mots de passe ingérables</strong><p>Un identifiant par outil, oublié ou réutilisé, et autant de portes mal fermées.</p></div>
+      </div>
+      <div class="reponse">
+        <div><b>Solide</b><p>Une seule structure porte tous les outils, comme la charpente métallique de la tour Eiffel.</p></div>
+        <div><b>Simple</b><p>Une seule conversation pour tout. Les accès aux logiciels sont gardés dans un coffre chiffré, et l'IA ne les voit jamais.</p></div>
+        <div><b>Durable</b><p>Les outils changent, la structure reste. On remplace une pièce sans démonter l'ensemble.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-promesse">
+    <p class="etiquette">La promesse</p>
+    <div class="contenu">
+      <h2 id="s-promesse" class="promesse">Un seul interlocuteur pour tous les logiciels de la ferme, qui <em>cite ses sources</em> et <em>attend votre accord</em> avant d'écrire.</h2>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-quoi">
+    <p class="etiquette">Ce que c'est</p>
+    <div class="contenu">
+      <h2 id="s-quoi">Un passeur entre les outils</h2>
+      <div class="colonnes">
+        <div>
+          <h3>Aiffel est</h3>
+          <ul class="liste est">
+            <li><p>Un interlocuteur unique<span>Une conversation sur Telegram, puis sur le web et le mobile, pour interroger et alimenter plusieurs logiciels.</span></p></li>
+            <li><p>Un relais vers vos outils<span>Il sait où lire et où écrire chaque information : Ekylibre pour la gestion, Lexicon pour le référentiel, Lyvre pour la comptabilité.</span></p></li>
+            <li><p>Un ensemble d'agents métier<span>Traçabilité, agronomie, PAC, gestion : chaque ferme active ceux dont elle a besoin et règle leur autonomie.</span></p></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Aiffel n'est pas</h3>
+          <ul class="liste nest">
+            <li><p>Un logiciel de plus à apprendre<span>Il s'utilise sans formation, avec les mots de tous les jours.</span></p></li>
+            <li><p>Un nouvel endroit où ranger vos données<span>Chaque information reste dans le logiciel qui en est la référence.</span></p></li>
+            <li><p>Un pilote automatique<span>Il prépare et vérifie. L'agriculteur valide chaque écriture.</span></p></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-comment">
+    <p class="etiquette">Comment ça marche</p>
+    <div class="contenu">
+      <h2 id="s-comment">Trois temps, un seul geste</h2>
+      <div class="etapes">
+        <div class="etape">
+          <span class="num" aria-hidden="true">1</span>
+          <h3>Vous le dites</h3>
+          <p>Un vocal depuis la cabine ou un message écrit, avec les noms de parcelles de la ferme. Aiffel vous renvoie ce qu'il a compris.</p>
+        </div>
+        <div class="etape">
+          <span class="num" aria-hidden="true">2</span>
+          <h3>Aiffel prépare et vérifie</h3>
+          <p>Il complète la date, la parcelle et le produit, puis contrôle la dose, la ZNT et le délai avant récolte. Chaque valeur affiche sa provenance.</p>
+        </div>
+        <div class="etape">
+          <span class="num" aria-hidden="true">3</span>
+          <h3>Vous validez</h3>
+          <p>Un bouton Valider, et l'intervention arrive dans Ekylibre avec son numéro. Avant de valider, vous pouvez corriger ou annuler.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-principes">
+    <p class="etiquette">Principes</p>
+    <div class="contenu">
+      <h2 id="s-principes">Une IA de confiance, sobre et souveraine</h2>
+      <div class="principes">
+        <div class="principe">
+          <h3>Il cite ses sources</h3>
+          <p>Chaque réponse dit d'où vient l'information : le logiciel, la fiche Lexicon, le document.</p>
+          <span class="ref">Explicabilité</span>
+        </div>
+        <div class="principe">
+          <h3>L'humain décide</h3>
+          <p>Rien n'est écrit sans validation. L'autonomie de chaque agent se règle ferme par ferme.</p>
+          <span class="ref">Hybridation homme-machine</span>
+        </div>
+        <div class="principe">
+          <h3>Il a le droit de ne pas savoir</h3>
+          <p>Aiffel dit « je ne sais pas » plutôt que d'inventer. Il vous fait relire la transcription de chaque vocal, et tout se corrige avant validation.</p>
+          <span class="ref">Droit à l'erreur</span>
+        </div>
+        <div class="principe">
+          <h3>Il consomme peu</h3>
+          <p>Le plus petit modèle qui suffit, un modèle local quand c'est possible, et une consommation mesurée pour chaque ferme.</p>
+          <span class="ref">Sobriété numérique</span>
+        </div>
+        <div class="principe">
+          <h3>Vos données restent chez vous</h3>
+          <p>Hébergement dans l'Union européenne, données réversibles, et la possibilité d'un fournisseur d'IA européen ou local.</p>
+          <span class="ref">Souveraineté</span>
+        </div>
+      </div>
+      <p class="livre">Ces principes viennent du livre <i>L'IA des Champs</i>. Pour Aiffel, ce sont des exigences de conception, vérifiées dans le code.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-engagements">
+    <p class="etiquette">Engagements</p>
+    <div class="contenu">
+      <h2 id="s-engagements">Frugal et ouvert, par construction</h2>
+      <div class="engagements">
+        <div class="engagement">
+          <h3><span>Frugal</span></h3>
+          <p class="accroche">Pas un outil de plus à alimenter : moins d'écrans, moins de ressaisie, moins d'énergie.</p>
+          <ul class="liste est">
+            <li><p>Rien à acheter<span>Le téléphone et la messagerie que la ferme utilise déjà suffisent.</span></p></li>
+            <li><p>La juste dose d'IA<span>Le plus petit modèle qui fait le travail, et un modèle local quand c'est possible.</span></p></li>
+            <li><p>La voix traitée sur place<span>Aiffel transcrit les vocaux lui-même, sans service extérieur, et ne conserve pas l'audio.</span></p></li>
+            <li><p>Aucune donnée en double<span>Chaque information reste dans le logiciel qui en est la référence.</span></p></li>
+            <li><p>Une consommation mesurée<span>Suivie ferme par ferme, pour la voir et la réduire.</span></p></li>
+          </ul>
+        </div>
+        <div class="engagement">
+          <h3><span>100 % ouvert</span></h3>
+          <p class="accroche">Un commun numérique, compatible avec tous les outils de la ferme.</p>
+          <ul class="liste est">
+            <li><p>Code ouvert<span>Chacun peut lire, vérifier et améliorer Aiffel.</span></p></li>
+            <li><p>Connecteurs publiés<span>Chaque connexion construite pour une ferme sert à toutes les autres.</span></p></li>
+            <li><p>Branché sur tous les outils<span>Par API ou MCP quand le logiciel en propose, par les fichiers (Excel, CSV, PDF, photos), et sinon avec les accès de la ferme gardés dans un coffre chiffré.</span></p></li>
+            <li><p>Installable partout<span>En service hébergé dans l'Union européenne, ou sur le serveur d'une ferme, d'une coopérative ou d'une CUMA.</span></p></li>
+            <li><p>Réversible<span>La ferme peut partir à tout moment avec ses données et ses réglages.</span></p></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-reseau">
+    <p class="etiquette">Écosystème</p>
+    <div class="contenu">
+      <h2 id="s-reseau">Ce qu'Aiffel relie</h2>
+      <div class="reseau">
+        <table>
+          <thead><tr><th class="etiquette">Logiciel</th><th class="etiquette">Rôle sur la ferme</th><th class="etiquette">Accès d'Aiffel</th></tr></thead>
+          <tbody>
+            <tr class="groupe"><td colspan="3">Outils ouverts</td></tr>
+            <tr><td>Ekylibre</td><td>Gestion d'exploitation : parcelles, interventions, stocks, matériel</td><td><span class="acces ecrit">lecture · écriture validée</span></td></tr>
+            <tr><td>Lexicon</td><td>Référentiel agricole ouvert : produits, homologations, variétés, 54 jeux de données</td><td><span class="acces lit">lecture seule</span></td></tr>
+            <tr><td>Lyvre</td><td>Comptabilité open source</td><td><span class="acces bientot">à venir</span></td></tr>
+            <tr><td>Annuaire OSFarm</td><td>Catalogue des communs numériques agricoles, pour trouver les outils à relier</td><td><span class="acces lit">lecture seule</span></td></tr>
+            <tr class="groupe"><td colspan="3">Logiciels du marché</td></tr>
+            <tr><td>Geofolia</td><td>Traçabilité parcellaire et suivi des cultures</td><td><span class="acces bientot">prévu</span></td></tr>
+            <tr><td>Smag Farmer</td><td>Traçabilité parcellaire et pilotage des cultures</td><td><span class="acces bientot">prévu</span></td></tr>
+            <tr><td>MesParcelles</td><td>Enregistrement des pratiques à la parcelle</td><td><span class="acces bientot">prévu</span></td></tr>
+            <tr><td>Isacompta</td><td>Comptabilité agricole</td><td><span class="acces bientot">prévu</span></td></tr>
+            <tr class="groupe"><td colspan="3">Sur l'ordinateur de la ferme</td></tr>
+            <tr><td>Tableurs Excel</td><td>Les suivis faits maison : stocks, troupeau, chantiers, prix de vente</td><td><span class="acces bientot">prévu</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="feuille">
+        <div>
+          <h3>Phase 1, en cours</h3>
+          <ul>
+            <li>Conversation sur Telegram, texte et vocal</li>
+            <li>Saisie d'interventions dans Ekylibre, après validation</li>
+            <li>Questions sur les données de la ferme et le référentiel Lexicon</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Ensuite</h3>
+          <ul>
+            <li>Interface web, puis application mobile</li>
+            <li>WhatsApp, très utilisé par les agriculteurs</li>
+            <li>Comptabilité avec Lyvre</li>
+            <li>Logiciels du marché : Geofolia, Smag Farmer, MesParcelles, Isacompta</li>
+            <li>Tableurs Excel de la ferme</li>
+            <li>Agents proposés par d'autres intégrateurs</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="s-identite">
+    <p class="etiquette">Identité</p>
+    <div class="contenu">
+      <h2 id="s-identite">Un nom, un signe</h2>
+
+      <div class="nom">
+        <div>
+          <span class="etiquette proposition">Le nom</span>
+          <p>Aiffel s'entend comme Eiffel. La tour tient depuis 1889 parce que des milliers de pièces simples y sont assemblées en une structure solide. Aiffel fait de même avec les applications et les données utiles à une ferme : il les relie en un ensemble simple et durable.</p>
+          <p>Les deux premières lettres rappellent l'intelligence artificielle. Elle sert ici à mettre de l'ordre, pas à ajouter un outil de plus.</p>
+        </div>
+        <div class="declinaisons">
+          <div class="tuile clair"><svg aria-hidden="true"><use href="#signe"/></svg><span class="mot">AIFFEL</span><span class="etiquette">Sur fond clair</span></div>
+          <div class="tuile sombre"><svg aria-hidden="true"><use href="#signe"/></svg><span class="mot">AIFFEL</span><span class="etiquette">Sur fond sombre</span></div>
+          <div class="tuile vert"><svg aria-hidden="true"><use href="#signe"/></svg><span class="mot">AIFFEL</span><span class="etiquette">Sur vert</span></div>
+          <div class="tuile mono">
+            <div class="petits" aria-hidden="true">
+              <svg width="16" height="16"><use href="#signe-petit"/></svg>
+              <svg width="24" height="24"><use href="#signe-petit"/></svg>
+              <svg width="32" height="32"><use href="#signe"/></svg>
+              <svg width="48" height="48"><use href="#signe"/></svg>
+            </div>
+            <span class="etiquette">Petites tailles : 16, 24, 32, 48 px</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="anatomie">
+        <svg viewBox="0 0 64 64" role="img" aria-label="Le signe Aiffel"><use href="#signe"/></svg>
+        <dl>
+          <div><dt>Un A en structure</dt><dd>Deux jambes qui se rejoignent au sommet, comme la tour Eiffel ou un treillis de palissage. Le signe dit d'abord la solidité.</dd></div>
+          <div><dt>Une bande verte</dt><dd>La barre du A est une parcelle en herbe à l'horizon : ce qui pousse et dure. C'est la seule couleur vive de l'identité.</dd></div>
+          <div><dt>Des sillons</dt><dd>Sous la barre, trois rangs filent vers l'horizon. En dessous de 24 px, ils disparaissent pour garder un signe lisible.</dd></div>
+        </dl>
+      </div>
+
+      <h3 class="sous-titre">Palette</h3>
+      <div class="palette">
+        <div class="teinte"><span class="aplat" style="background:#58AD45"></span><div><strong>Blé en herbe</strong><span class="data">#58AD45</span><p>Accent unique : la barre du signe, les boutons de validation, les surlignages.</p></div></div>
+        <div class="teinte"><span class="aplat" style="background:#16211C"></span><div><strong>Terre de sillon</strong><span class="data">#16211C</span><p>Texte et signe sur fond clair, fond des versions sombres.</p></div></div>
+        <div class="teinte"><span class="aplat" style="background:#F1F3EE"></span><div><strong>Calcaire</strong><span class="data">#F1F3EE</span><p>Fond principal.</p></div></div>
+        <div class="teinte"><span class="aplat" style="background:#245F86"></span><div><strong>Bouillie</strong><span class="data">#245F86</span><p>Liens et étiquettes de source.</p></div></div>
+        <div class="teinte"><span class="aplat" style="background:#56655D"></span><div><strong>Lichen</strong><span class="data">#56655D</span><p>Texte secondaire.</p></div></div>
+      </div>
+
+      <h3 class="sous-titre">Typographie</h3>
+      <div class="typos">
+        <div class="typo">
+          <div class="nom-typo"><strong>Big Shoulders Display</strong><span>Titres. Une capitale étroite, héritée des structures métalliques.</span></div>
+          <p class="spec-titre">Récolte 2026</p>
+        </div>
+        <div class="typo">
+          <div class="nom-typo"><strong>Atkinson Hyperlegible</strong><span>Texte. Dessinée pour la lisibilité, utile en plein soleil sur un téléphone.</span></div>
+          <p class="spec-texte">Le blé de la parcelle du Moulin a reçu 40 unités d'azote le 12 mars. Prochain apport prévu au stade épi 1 cm.</p>
+        </div>
+        <div class="typo">
+          <div class="nom-typo"><strong>IBM Plex Mono</strong><span>Données : doses, surfaces, références.</span></div>
+          <p class="spec-data">12,40 ha · 0,8 L/ha · ZNT 5 m · BBCH 31</p>
+        </div>
+      </div>
+
+      <h3 class="sous-titre">Ton</h3>
+      <div class="ton">
+        <div class="ton-tete"><p class="etiquette">Aiffel dit</p><p class="etiquette">Aiffel évite</p></div>
+        <div class="ton-ligne"><p>« Parcelle du Moulin, 12,4 ha. »<span class="pourquoi">Les noms que la ferme utilise.</span></p><p>« Zone de production n° 4512. »</p></div>
+        <div class="ton-ligne"><p>« Je n'ai pas trouvé ce produit dans Lexicon. Vous pouvez me donner son nom exact ? »<span class="pourquoi">Ce qui manque, et comment avancer.</span></p><p>« Erreur : ressource introuvable. »</p></div>
+        <div class="ton-ligne"><p>« Je prépare l'intervention, vous validez. »<span class="pourquoi">Qui fait quoi, clairement.</span></p><p>« L'IA s'occupe de tout pour vous. »</p></div>
+        <div class="ton-ligne"><p>« Vos données restent dans vos logiciels. »<span class="pourquoi">Un fait vérifiable plutôt qu'un slogan.</span></p><p>« Révolutionnez votre exploitation grâce à l'IA. »</p></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="pied">
+    <span>Aiffel · document de travail, octobre 2026</span>
+    <span>Identité et concept, version 0.1</span>
+  </footer>
+
+</div>
