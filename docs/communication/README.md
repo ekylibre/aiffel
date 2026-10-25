@@ -9,9 +9,12 @@ parallèle du développement. Version 0.1 du 2026-10-24.
 |---|---|---|
 | `identite.html` | Monde agricole élargi : conseillers, coopératives, chambres, OSFarm/GAIA | https://claude.ai/artifact/LaMQYdKaJWQTajen9qAwBk |
 | `fiche-a4.html`, `fiche-a4.pdf` | Agriculteurs, fiche recto à imprimer et distribuer | https://claude.ai/artifact/2aBFeCpE2F1yYP2KXBPqBq |
+| `schema.html`, `schema.pdf` | Schéma fonctionnel en tour Eiffel : agriculteur au sommet, outils dans la base | https://claude.ai/artifact/P8wiJxf5Cpsn5h5pagSy3m |
 | `signe.svg`, `signe-petit.svg` | Logo : version complète, et version simplifiée sous 24 px | |
+| Document commercial (doc partagé, pas de fichier) | Prospects et partenaires : offres Libre (Telegram), En ligne (app.aiffel.org) et Pro (WhatsApp) | https://claude.ai/artifact/T2TFefaA6knbLPPLAjAJKr |
+| `veille-concurrentielle.md` | Interne : comparatif Tellia, Hector, Hectar AI, xSupra, Terragrow (2026-10-25) | |
 
-Les pages HTML sont écrites pour l'outil Artifact : elles n'ont ni `<!doctype>` ni `<html>`. Pour regénérer le PDF :
+Les pages HTML sont écrites pour l'outil Artifact : elles n'ont ni `<!doctype>` ni `<html>`. Pour regénérer un PDF (par exemple la fiche A4) :
 
 ```bash
 cd docs/communication
@@ -19,6 +22,8 @@ cd docs/communication
 google-chrome --headless=new --no-pdf-header-footer --virtual-time-budget=8000 \
   --print-to-pdf=fiche-a4.pdf /tmp/fiche-print.html
 ```
+
+La commande s'applique à l'identique pour `schema.html` → `schema.pdf`.
 
 ## Concept
 
@@ -77,6 +82,10 @@ Les maquettes reprennent les textes réels du bot (relevé du 2026-10-24) :
 Les phrases des cas de terrain viennent du corpus de Duke (267 phrases, banc A7). Si ces textes changent dans le code,
 il faut mettre à jour les maquettes.
 
+L'intervention de la démo s'adosse à une vraie sortie Lexicon : BOUILLIE BORDELAISE MANICA N.C. (AMM 2010618, firme
+MANICA S.P.A.), homologuée sur Vigne contre Mildiou — dose max 7,5 kg/ha, DAR 21 jours, 5 applications. Vérifié le
+2026-10-25 via `search_phytosanitary_products` sur `https://lexicon.osfarm.org/mcp`.
+
 À l'état actuel du code :
 
 - aucune annulation n'est possible après validation ;
@@ -87,13 +96,10 @@ La facture reste donc une **projection** (phase 3, avec Lyvre), présentée comm
 
 ## Points ouverts
 
-- [ ] La dose maximale (7,5 kg/ha) et le DAR (21 j) de la bouillie bordelaise sont fictifs, et le n° d'AMM est masqué.
-      Les remplacer par une vraie sortie de Lexicon.
 - [ ] La réponse « mildiou » de la galerie est plausible, mais aucune source agronomique ne la soutient en phase 1. La
       garder ou la remplacer par une demande de précision.
 - [ ] Vérifier juridiquement la connexion par identifiants aux logiciels propriétaires (Geofolia, Smag Farmer,
       MesParcelles, Isacompta) au regard de leurs conditions d'utilisation.
-- [ ] Choisir entre « prévu » (page d'identité) et « Bientôt » (fiche A4) pour ces logiciels.
 - [ ] Ajouter un QR code vers aiffel.org quand le site sera en ligne : le domaine est encore parqué.
 - [ ] Le message `/aide` du bot est périmé (`aiffel/channels/handlers.py:14-20`) : à signaler côté développement.
 - [ ] Supports suivants possibles : verso questions-réponses de la fiche, deck de présentation, design system.
