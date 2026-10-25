@@ -49,10 +49,11 @@ class Match:
 def _diseases(body: dict[str, Any]) -> list[Match]:
     matches = []
     for row in body.get("results") or []:
-        name = row.get("description") or row.get("name")
+        # « label » (nom lisible) dans les réponses observées ; « name » est le code EPPO.
+        name = row.get("label") or row.get("description") or row.get("name")
         if not name:
             continue
-        details = {"code": row["name"]} if row.get("name") and row.get("description") else {}
+        details = {"code": row["name"]} if row.get("name") and row["name"] != name else {}
         matches.append(Match(str(name), float(row.get("score") or 0.0), details))
     return matches
 

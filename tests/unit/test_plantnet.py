@@ -22,7 +22,7 @@ from aiffel.vault import SecretValue
 KEY = "cle-plantnet-secrete"
 DISEASES = {
     "results": [
-        {"name": "PHYTIN", "description": "Mildiou de la pomme de terre", "score": 0.8213},
+        {"name": "PHYTIN", "label": "Mildiou de la pomme de terre", "score": 0.8213},
         {"name": "ALTESO", "description": "Alternariose", "score": 0.07},
     ],
     "remainingIdentificationRequests": 499,
