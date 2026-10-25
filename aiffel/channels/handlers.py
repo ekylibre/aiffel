@@ -1,26 +1,33 @@
 """Réponses aux commandes de base (jalon M1) ; le reste des messages ira à l'orchestrateur (A4)."""
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from aiffel.actions.service import ActionService, Outcome, parse_callback
 from aiffel.channels.base import Button, InboundKind, InboundMessage, OutboundMessage
 from aiffel.channels.dispatcher import UNSUPPORTED, WELCOME, Caller
 from aiffel.connectors.ekylibre.client import EkylibreError, EkylibreUnauthorized
+from aiffel.extensions import CommandHandler, Extension
 from aiffel.farm_context import FarmContextService, FarmRef
 from aiffel.farm_llm import FarmLLMService, LLMKeyError
 from aiffel.pairing import PURPOSE_LLM_KEY, PairingService
 from aiffel.providers.catalog import CHOICES, PROVIDERS, ProviderName
 from aiffel.voice import VoiceService
 
-HELP = (
-    "Voici ce que je sais faire pour l'instant :\n"
-    "• /ferme : votre ferme et ses parcelles\n"
-    "• /modele : le modèle d'IA de la ferme (et votre propre clé)\n"
-    "• /start : relier ou reconnecter votre compte Ekylibre\n"
-    "• /aide : ce message\n\n"
-    "Bientôt : enregistrer une intervention en me la dictant, et répondre à vos questions."
+HELP_LINES = (
+    "• /ferme : votre ferme et ses parcelles",
+    "• /modele : le modèle d'IA de la ferme (et votre propre clé)",
+    "• /start : relier ou reconnecter votre compte Ekylibre",
+    "• /aide : ce message",
 )
+HELP_END = "Bientôt : enregistrer une intervention en me la dictant, et répondre à vos questions."
+
+
+def help_text(extra: list[str] | None = None) -> str:
+    lines = [*HELP_LINES[:-1], *(extra or []), HELP_LINES[-1]]
+    return "Voici ce que je sais faire pour l'instant :\n" + "\n".join(lines) + f"\n\n{HELP_END}"
+
+
 NO_FARM = "Votre compte n'est relié à aucune ferme. Envoyez /start pour vous connecter."
 RECONNECT = (
     "Ekylibre a refusé l'accès (déconnexion depuis un autre appareil ou mot de passe changé). "
@@ -30,10 +37,6 @@ UNAVAILABLE = "Ekylibre ne répond pas pour le moment. Réessayez dans quelques 
 MAX_LISTED_ZONES = 30
 LLM_CALLBACK = "llm"
 OWNER_ONLY = "Seul l'exploitant de la ferme peut changer le modèle d'IA."
-
-
-def _tokens(count: int) -> str:
-    return f"{count:,}".replace(",", "\u202f")
 
 
 Assistant = Callable[[Caller, FarmRef, InboundMessage], Awaitable[list[OutboundMessage]]]
@@ -56,6 +59,14 @@ class Handlers:
     actions: ActionService | None = None
     voice: VoiceService | None = None
     llm: FarmLLMService | None = None
+    extensions: list[Extension] = field(default_factory=list)
+
+    def _command(self, name: str | None) -> CommandHandler | None:
+        return next((e.commands[name] for e in self.extensions if name in e.commands), None)
+
+    def _extension_callback(self, data: str | None) -> CommandHandler | None:
+        prefix = (data or "").split(":", 1)[0]
+        return next((e.callbacks[prefix] for e in self.extensions if prefix in e.callbacks), None)
 
     async def invite(self, caller: Caller, intro: str) -> list[OutboundMessage]:
         code = await self.pairing.create_code(caller.identity_id)
@@ -94,11 +105,14 @@ class Handlers:
                     return await self.invite(caller, f"Reconnexion à la ferme {farm.name}.")
                 return [OutboundMessage(text=f"Vous êtes connecté à la ferme {farm.name}. /aide")]
             if message.command in ("aide", "help"):
-                return [OutboundMessage(text=HELP)]
+                extra = [line for e in self.extensions for line in e.help_lines]
+                return [OutboundMessage(text=help_text(extra))]
             if message.command == "ferme":
                 return await self._farm_summary(caller, farm)
             if message.command in ("modele", "modèle", "model") and self.llm is not None:
                 return await self._llm_menu(self.llm, farm)
+            if (command := self._command(message.command)) is not None:
+                return await command(caller, farm, message)
         if message.kind is InboundKind.VOICE and self.voice is not None and message.file_id:
             return await self._voice(self.voice, caller, farm, message)
         return await self.assistant(caller, farm, message)
@@ -146,6 +160,8 @@ class Handlers:
     ) -> list[OutboundMessage]:
         if (message.callback_data or "").startswith(f"{LLM_CALLBACK}:") and self.llm is not None:
             return await self._llm_callback(self.llm, caller, farm, message.callback_data or "")
+        if (callback := self._extension_callback(message.callback_data)) is not None:
+            return await callback(caller, farm, message)
         parsed = parse_callback(message.callback_data)
         if parsed is None or self.actions is None or caller.user_id is None:
             return [OutboundMessage(text="Ce bouton n'est plus valable.")]
@@ -193,13 +209,9 @@ class Handlers:
             lines.append(
                 f"• {choice.label} ({PROVIDERS[choice.provider]}) : {choice.note}{missing}"
             )
-        if (allowance := await llm.allowance(farm.farm_id)) is not None:
-            used, quota = allowance
-            lines += [
-                "",
-                f"Crédit offert par Aiffel (sans clé propre) : {_tokens(min(used, quota))} jetons "
-                f"utilisés ce mois-ci sur {_tokens(quota)}, remis à zéro le 1er du mois.",
-            ]
+        for extension in self.extensions:
+            if extension.llm_menu_lines is not None:
+                lines += await extension.llm_menu_lines(farm.farm_id)
         if farm.role != "owner":
             return [OutboundMessage(text="\n".join([*lines, "", OWNER_ONLY]))]
         lines += [

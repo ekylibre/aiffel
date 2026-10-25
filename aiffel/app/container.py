@@ -18,6 +18,15 @@ from aiffel.channels.telegram.api import TelegramClient
 from aiffel.connectors.lexicon.client import LexiconClient
 from aiffel.db.models import ChannelIdentity
 from aiffel.db.session import global_session, make_engine, make_sessionmaker
+from aiffel.extensions import (
+    CoreServices,
+    Extension,
+    Notify,
+    credit_policy,
+    load_extensions,
+    on_farm_created,
+    on_usage,
+)
 from aiffel.farm_context import FarmContextService
 from aiffel.farm_llm import FarmLLMService
 from aiffel.logging import configure_logging
@@ -60,6 +69,7 @@ class Services:
     orchestrator: Orchestrator | None
     voice: VoiceService | None = None
     llm: FarmLLMService | None = None
+    extensions: list[Extension] = field(default_factory=list)
     _dispatcher: Dispatcher | None = field(default=None, init=False)
 
     def handlers(self) -> Handlers:
@@ -72,6 +82,7 @@ class Services:
             self.actions,
             self.voice,
             self.llm,
+            self.extensions,
         )
 
     def dispatcher(self) -> Dispatcher:
@@ -87,11 +98,9 @@ class Services:
 
     async def notify(self, identity_id: uuid.UUID, text: str) -> None:
         """Message proactif sur Telegram (meilleur effort)."""
-        async with global_session(self.sessions) as session:
-            identity = await session.get(ChannelIdentity, identity_id)
-            chat_id = self.identities.external_id(identity) if identity else None
-        if chat_id:
-            await self.telegram.send(chat_id, OutboundMessage(text=text))
+        await _notifier(self.sessions, self.identities, self.telegram)(
+            identity_id, OutboundMessage(text=text)
+        )
 
     async def notify_paired(self, result: PairingResult) -> None:
         """Confirme le raccordement sur Telegram (meilleur effort)."""
@@ -101,6 +110,9 @@ class Services:
         )
 
     async def aclose(self) -> None:
+        for extension in self.extensions:
+            if extension.aclose is not None:
+                await extension.aclose()
         if self.llm is not None:
             await self.llm.aclose()
             await self.llm.http.aclose()
@@ -134,6 +146,21 @@ def make_provider(
     )
 
 
+def _notifier(
+    sessions: async_sessionmaker[AsyncSession],
+    identities: IdentityService,
+    telegram: TelegramClient,
+) -> Notify:
+    async def notify(identity_id: uuid.UUID, message: OutboundMessage) -> None:
+        async with global_session(sessions) as session:
+            identity = await session.get(ChannelIdentity, identity_id)
+            chat_id = identities.external_id(identity) if identity else None
+        if chat_id:
+            await telegram.send(chat_id, message)
+
+    return notify
+
+
 def build_services(settings: Settings | None = None) -> Services:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
@@ -150,22 +177,40 @@ def build_services(settings: Settings | None = None) -> Services:
     farms = FarmContextService(sessions, keyring, http)
     lexicon = LexiconClient(settings.lexicon_mcp_url)
     actions = ActionService(sessions)
+    telegram = TelegramClient(SecretValue(bot_token))
+    identities = IdentityService(SecretValue(hash_salt), keyring)
+    pairing = PairingService(
+        sessions, keyring, http, timedelta(minutes=settings.pairing_code_ttl_minutes)
+    )
+    # Extensions installées (paiement…) : elles complètent l'assemblage ci-dessous.
+    extensions = load_extensions(
+        CoreServices(
+            settings, sessions, keyring, pairing, farms, _notifier(sessions, identities, telegram)
+        )
+    )
+    pairing.on_farm_created = on_farm_created(extensions)
     # Client propre aux modèles d'IA : réponses longues (outils, raisonnement).
-    llm = FarmLLMService(sessions, keyring, settings, httpx.AsyncClient(timeout=120.0))
+    llm = FarmLLMService(
+        sessions,
+        keyring,
+        settings,
+        httpx.AsyncClient(timeout=120.0),
+        credit_policy=credit_policy(extensions),
+    )
     # L'agent tourne même sans clé d'Aiffel : une ferme peut apporter la sienne (/modele).
     orchestrator = Orchestrator(
         sessions,
         farms,
         make_provider(settings),
-        ToolGateway([*phase1_tools(), *propose_tools()]),
+        ToolGateway([*phase1_tools(), *propose_tools(), *(t for e in extensions for t in e.tools)]),
         AgentRuntime.load(),
         lexicon=lexicon,
         max_iterations=settings.agent_max_iterations,
         model_label=f"{settings.llm_provider}:{settings.llm_model}",
         actions=actions,
         llm=llm,
+        on_usage=on_usage(extensions),
     )
-    telegram = TelegramClient(SecretValue(bot_token))
     voice = (
         VoiceService(
             sessions,
@@ -178,6 +223,7 @@ def build_services(settings: Settings | None = None) -> Services:
                 settings.whisper_cache_dir,
             ),
             max_seconds=settings.voice_max_seconds,
+            on_usage=on_usage(extensions),
         )
         if settings.stt_enabled
         else None
@@ -187,18 +233,17 @@ def build_services(settings: Settings | None = None) -> Services:
         engine=engine,
         sessions=sessions,
         keyring=keyring,
-        identities=IdentityService(SecretValue(hash_salt), keyring),
+        identities=identities,
         telegram=telegram,
         http=http,
-        pairing=PairingService(
-            sessions, keyring, http, timedelta(minutes=settings.pairing_code_ttl_minutes)
-        ),
+        pairing=pairing,
         farms=farms,
         lexicon=lexicon,
         actions=actions,
         orchestrator=orchestrator,
         voice=voice,
         llm=llm,
+        extensions=extensions,
     )
 
 

@@ -67,8 +67,11 @@ class TelegramClient:
 
     async def call(self, method: str, **params: Any) -> Any:
         payload = {k: v for k, v in params.items() if v is not None}
+        return await self._post(method, json=payload)
+
+    async def _post(self, method: str, **request: Any) -> Any:
         try:
-            response = await self._client.post(method, json=payload)
+            response = await self._client.post(method, **request)
         except httpx.HTTPError as exc:
             # Ne pas propager l'exception d'origine : son message contient l'URL, donc le jeton.
             raise TelegramError(f"{method} : erreur réseau ({type(exc).__name__})") from None
@@ -91,6 +94,12 @@ class TelegramClient:
                 text=chunk,
                 reply_markup=_reply_markup(message) if last else None,
                 link_preview_options={"is_disabled": True},
+            )
+        for document in message.documents:
+            await self._post(
+                "sendDocument",
+                data={"chat_id": chat_id},
+                files={"document": (document.filename, document.content, document.mime)},
             )
 
     async def typing(self, chat_id: str) -> None:

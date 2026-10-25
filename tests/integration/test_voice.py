@@ -1,4 +1,4 @@
-"""Vocal (A6) : transcription, renvoi à l'utilisateur, limites et comptage ``stt_seconds``."""
+"""Vocal (A6) : transcription, renvoi à l'utilisateur, limites et durée transmise aux extensions."""
 
 import uuid
 from datetime import timedelta
@@ -6,15 +6,13 @@ from typing import Any
 
 import httpx
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aiffel.channels.base import InboundKind, InboundMessage, OutboundMessage
 from aiffel.channels.dispatcher import Caller
 from aiffel.channels.handlers import Handlers
 from aiffel.channels.telegram.api import TelegramClient, TelegramError
-from aiffel.db.models import UsageMetric
-from aiffel.db.session import farm_session
+from aiffel.extensions import UsageEvent
 from aiffel.farm_context import FarmRef
 from aiffel.orchestrator.agent import TRANSCRIBED_NOTE
 from aiffel.pairing import PairingService
@@ -74,7 +72,12 @@ async def env(app_sessions: Sessions, keyring: Keyring) -> dict[str, Any]:
         return b"OGG"
 
     transcriber = FakeTranscriber()
-    voice = VoiceService(app_sessions, fetch, transcriber, max_seconds=60)
+    usage: list[UsageEvent] = []
+
+    async def on_usage(_session: object, event: UsageEvent) -> None:
+        usage.append(event)
+
+    voice = VoiceService(app_sessions, fetch, transcriber, max_seconds=60, on_usage=on_usage)
     farm = FarmRef(farm_id, "Ferme vocale", "owner", True)
     handlers = Handlers(
         PairingService(app_sessions, keyring, httpx.AsyncClient(), timedelta(minutes=15)),
@@ -85,19 +88,13 @@ async def env(app_sessions: Sessions, keyring: Keyring) -> dict[str, Any]:
     )
     return {
         "farm_id": farm_id,
+        "usage": usage,
         "handlers": handlers,
         "seen": seen,
         "fetched": fetched,
         "transcriber": transcriber,
         "caller": Caller(uuid.uuid4(), uuid.uuid4()),
     }
-
-
-async def _stt_seconds(sessions: Sessions, farm_id: uuid.UUID) -> int | None:
-    async with farm_session(sessions, farm_id) as session:
-        return await session.scalar(
-            select(UsageMetric.stt_seconds).where(UsageMetric.model == "stt")
-        )
 
 
 async def test_voice_is_transcribed_echoed_and_sent_as_text(
@@ -110,7 +107,8 @@ async def test_voice_is_transcribed_echoed_and_sent_as_text(
     assert message.kind is InboundKind.TEXT and message.transcribed
     assert message.text == "j'ai désherbé le maïs ce matin"
     await env["handlers"].paired(env["caller"], _voice(6))
-    assert await _stt_seconds(app_sessions, env["farm_id"]) == 10
+    assert [e.stt_seconds for e in env["usage"]] == [4, 6]
+    assert {(e.farm_id, e.model) for e in env["usage"]} == {(env["farm_id"], "stt")}
 
 
 async def test_too_long_voice_is_refused_before_download(env: dict[str, Any]) -> None:

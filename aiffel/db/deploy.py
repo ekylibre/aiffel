@@ -15,6 +15,8 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 
+from aiffel.extensions import extension_migrations
+
 
 def _env(name: str) -> str:
     value = os.environ.get(name)
@@ -42,6 +44,8 @@ def main() -> None:
 
     # env.py lit AIFFEL_MIGRATION_DATABASE_URL via Settings.
     command.upgrade(alembic_config(), "head")
+    for upgrade in extension_migrations():
+        upgrade(url)
 
     engine = create_engine(url, isolation_level="AUTOCOMMIT")
     try:

@@ -15,8 +15,9 @@ from aiffel.channels.base import InboundKind, InboundMessage
 from aiffel.channels.dispatcher import Caller
 from aiffel.channels.identity import IdentityService
 from aiffel.connectors.ekylibre.auth import EkylibreInstance
-from aiffel.db.models import Connection, FarmMemory, Message, UsageMetric
+from aiffel.db.models import Connection, FarmMemory, Message
 from aiffel.db.session import farm_session, global_session
+from aiffel.extensions import UsageEvent
 from aiffel.farm_context import FarmContextService, FarmRef
 from aiffel.orchestrator.agent import RECONNECT, REFUSED, TOO_LONG, UNAVAILABLE, Orchestrator
 from aiffel.orchestrator.llm import LLMError, LLMResult, SystemPrompt, ToolCall, Usage
@@ -105,7 +106,7 @@ async def paired(
             text(
                 "TRUNCATE aiffel.pairing_codes, aiffel.channel_identities, aiffel.connections, "
                 "aiffel.memberships, aiffel.source_map, aiffel.secrets, aiffel.messages, "
-                "aiffel.conversations, aiffel.usage_metrics, aiffel.farm_memory CASCADE"
+                "aiffel.conversations, aiffel.farm_memory CASCADE"
             )
         )
     fake = FakeEkylibre()
@@ -165,9 +166,14 @@ async def test_tool_loop_answers_with_farm_data_and_no_secret_reaches_the_model(
     )
     lexicon = FakeLexicon()
     caller, farm = _farm(result)
-    [reply] = await _orchestrator(app_sessions, farms, provider, lexicon=lexicon).run_turn(
-        caller, farm, _msg("Quelles parcelles s'appellent Grands ?")
-    )
+    usage: list[UsageEvent] = []
+
+    async def on_usage(_session: object, event: UsageEvent) -> None:
+        usage.append(event)
+
+    [reply] = await _orchestrator(
+        app_sessions, farms, provider, lexicon=lexicon, on_usage=on_usage
+    ).run_turn(caller, farm, _msg("Quelles parcelles s'appellent Grands ?"))
     assert reply.text.startswith("Vous avez la parcelle Grands Champs")
 
     second = provider.calls[1]["messages"]
@@ -194,10 +200,14 @@ async def test_tool_loop_answers_with_farm_data_and_no_secret_reaches_the_model(
             (m.role, m.content)
             for m in await session.scalars(select(Message).order_by(Message.created_at))
         ]
-        metric = (await session.scalars(select(UsageMetric))).one()
     assert stored[0] == ("user", "Quelles parcelles s'appellent Grands ?")
     assert stored[1][0] == "assistant"
-    assert (metric.tokens_in, metric.tokens_out) == (100 + 50 + 200, 50)
+    [event] = usage
+    assert (event.tokens_in, event.tokens_out, event.farm_id) == (
+        100 + 50 + 200,
+        50,
+        result.farm_id,
+    )
 
 
 async def test_history_and_confirmed_aliases_are_used(

@@ -8,6 +8,12 @@ RUN uv sync --frozen --no-dev --extra stt --no-install-project
 COPY aiffel ./aiffel
 COPY runtime ./runtime
 RUN uv sync --frozen --no-dev --extra stt
+# Extensions présentes dans extensions/ (sous-modules git, éventuellement privés) : chacune est un
+# paquet Python qui se déclare par l'entry point « aiffel.extensions ». Absentes : rien à installer.
+COPY extensions ./extensions
+RUN for ext in extensions/*/; do \
+      if [ -f "${ext}pyproject.toml" ]; then uv pip install --python .venv/bin/python "$ext"; fi; \
+    done
 
 FROM python:3.12-slim
 RUN useradd --system --uid 10001 --home /app aiffel

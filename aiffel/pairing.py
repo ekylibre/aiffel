@@ -13,6 +13,7 @@ reconnecte (jeton refusé, nouveau téléphone) retrouve son utilisateur.
 import hashlib
 import secrets
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -46,6 +47,10 @@ EXPIRED = {
     PURPOSE_LLM_KEY: "Ce lien n'est plus valable. Envoyez /modele à Aiffel sur Telegram "
     "pour en recevoir un nouveau.",
 }
+# Objet d'un lien créé par une extension : message générique quand il a expiré.
+EXPIRED_OTHER = "Ce lien n'est plus valable. Redemandez-le à Aiffel sur Telegram."
+# Appelé dans la transaction qui crée une ferme (démarrage de l'essai, quand le paiement est actif).
+FarmCreatedHook = Callable[[AsyncSession, uuid.UUID], Awaitable[None]]
 CONNECTOR = "ekylibre"
 # Noms de types de secrets (pas des secrets).
 SECRET_TOKEN = "simple_token"  # noqa: S105
@@ -84,6 +89,7 @@ class PairingService:
     keyring: Keyring
     http: httpx.AsyncClient
     ttl: timedelta = timedelta(minutes=15)
+    on_farm_created: FarmCreatedHook | None = None
 
     async def create_code(self, identity_id: uuid.UUID, purpose: str = PURPOSE_PAIR) -> str:
         """Nouveau code pour cette identité et cet objet ; annule les précédents inutilisés."""
@@ -118,7 +124,7 @@ class PairingService:
                 or row.expires_at <= datetime.now(UTC)
                 or row.attempts >= PAIRING_MAX_ATTEMPTS
             ):
-                raise PairingError(EXPIRED[purpose])
+                raise PairingError(EXPIRED.get(purpose, EXPIRED_OTHER))
             return row.channel_identity_id
 
     async def use_code(self, code: str, purpose: str) -> uuid.UUID:
@@ -127,7 +133,7 @@ class PairingService:
         async with global_session(self.sessions) as session:
             row = await session.get(PairingCode, _hash_code(code), with_for_update=True)
             if row is None or row.used_at is not None:
-                raise PairingError(EXPIRED[purpose])
+                raise PairingError(EXPIRED.get(purpose, EXPIRED_OTHER))
             row.used_at = datetime.now(UTC)
         return identity_id
 
@@ -190,6 +196,8 @@ class PairingService:
                 )
                 session.add(farm)
                 await session.flush()
+                if self.on_farm_created is not None:
+                    await self.on_farm_created(session, farm_id)
 
             identity = await session.get(ChannelIdentity, identity_id)
             if identity is None:  # impossible : clé étrangère du code ; défense en profondeur

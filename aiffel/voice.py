@@ -17,11 +17,10 @@ from io import BytesIO
 from typing import Any, Protocol
 
 import structlog
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from aiffel.db.models import UsageMetric
 from aiffel.db.session import farm_session
+from aiffel.extensions import UsageEvent, UsageHook
 
 log = structlog.get_logger()
 
@@ -129,6 +128,8 @@ class VoiceService:
     transcriber: Transcriber
     max_seconds: int = DEFAULT_MAX_SECONDS
     max_bytes: int = DEFAULT_MAX_BYTES
+    # Durée transcrite, transmise aux extensions (mesure de la consommation).
+    on_usage: UsageHook | None = None
 
     async def transcribe(
         self, farm_id: uuid.UUID, file_id: str, duration_s: int | None
@@ -157,17 +158,11 @@ class VoiceService:
         return VoiceResult(text)
 
     async def _record(self, farm_id: uuid.UUID, seconds: int) -> None:
-        """``usage_metrics.stt_seconds`` : durée d'audio transcrite, par ferme et par jour."""
+        """Durée d'audio transcrite, transmise aux extensions."""
+        if self.on_usage is None:
+            return
+        event = UsageEvent(
+            farm_id, datetime.now(UTC), STT_METRIC_MODEL, stt_seconds=seconds, platform=True
+        )
         async with farm_session(self.sessions, farm_id) as session:
-            stmt = insert(UsageMetric).values(
-                farm_id=farm_id,
-                day=datetime.now(UTC).date(),
-                model=STT_METRIC_MODEL,
-                stt_seconds=seconds,
-            )
-            await session.execute(
-                stmt.on_conflict_do_update(
-                    index_elements=["farm_id", "day", "model"],
-                    set_={"stt_seconds": UsageMetric.stt_seconds + stmt.excluded.stt_seconds},
-                )
-            )
+            await self.on_usage(session, event)

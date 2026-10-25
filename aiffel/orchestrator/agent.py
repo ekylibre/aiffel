@@ -10,21 +10,20 @@ import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
 from typing import Any, Protocol
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aiffel.actions.service import ActionService, callback_data
 from aiffel.channels.base import Button, InboundKind, InboundMessage, OutboundMessage
 from aiffel.channels.dispatcher import Caller
-from aiffel.db.models import Conversation, FarmMemory, Message, UsageMetric
+from aiffel.db.models import Conversation, FarmMemory, Message
 from aiffel.db.session import farm_session
+from aiffel.extensions import UsageEvent, UsageHook
 from aiffel.farm_context import FarmContextService, FarmRef
-from aiffel.farm_llm import QuotaExhausted, ResolvedLLM
+from aiffel.farm_llm import NoPlatformCredit, ResolvedLLM
 from aiffel.orchestrator.llm import LLMError, LLMProvider, SystemPrompt, Usage
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.tools.catalog import RECONNECT_REASON
@@ -49,10 +48,9 @@ TOO_LONG = (
 VOICE_LATER = "Les messages vocaux arrivent bientôt. En attendant, écrivez-moi votre demande."
 TRANSCRIBED_NOTE = "[Message vocal transcrit automatiquement : des mots peuvent être mal reconnus]"
 PHOTO_LATER = "Je ne sais pas encore analyser les photos. Décrivez-moi ce que vous voyez."
-QUOTA_EXHAUSTED = (
-    "Votre ferme a utilisé tout le crédit d'IA offert par Aiffel ce mois-ci ; il sera renouvelé "
-    "le 1er du mois. Pour continuer d'ici là, l'exploitant peut ajouter sa propre clé "
-    "OpenRouter ou Anthropic avec /modele."
+BUDGET_EXHAUSTED = (
+    "Le crédit d'IA offert à votre ferme est épuisé. Pour continuer, l'exploitant peut ajouter "
+    "sa propre clé OpenRouter ou Anthropic avec /modele."
 )
 NO_MODEL = (
     "Aucun modèle d'IA n'est disponible pour votre ferme. L'exploitant peut en choisir un et "
@@ -64,7 +62,7 @@ class LLMResolver(Protocol):
     """Choisit le fournisseur de modèle d'une ferme (voir :mod:`aiffel.farm_llm`)."""
 
     async def resolve(self, farm_id: uuid.UUID) -> ResolvedLLM | None:
-        """Lève :class:`QuotaExhausted` quand le crédit offert est épuisé, sans clé propre."""
+        """Lève :class:`NoPlatformCredit` si la règle de crédit refuse la clé de la plateforme."""
 
 
 def _total(usage: Usage) -> int:
@@ -89,6 +87,8 @@ class Orchestrator:
     model_label: str = "llm"
     actions: ActionService | None = None
     llm: LLMResolver | None = None
+    # Consommation de chaque tour, transmise aux extensions (mesure, quota…).
+    on_usage: UsageHook | None = None
 
     async def run_turn(
         self, caller: Caller, farm: FarmRef, message: InboundMessage
@@ -108,8 +108,8 @@ class Orchestrator:
         if self.llm is not None:
             try:
                 resolved = await self.llm.resolve(farm.farm_id)
-            except QuotaExhausted:
-                return [OutboundMessage(text=QUOTA_EXHAUSTED)]
+            except NoPlatformCredit as exc:
+                return [OutboundMessage(text=exc.message)]
             provider = resolved.provider if resolved else None
             if resolved is not None:
                 label, platform, budget = (
@@ -216,9 +216,9 @@ class Orchestrator:
                 log.warning("agent.token_budget")
                 return TOO_LONG, usage
             if token_budget is not None and _total(usage) >= token_budget:
-                # Crédit offert épuisé en cours de tour : on s'arrête là.
-                log.info("agent.platform_quota")
-                return QUOTA_EXHAUSTED, usage
+                # Crédit de la plateforme épuisé en cours de tour : on s'arrête là.
+                log.info("agent.platform_budget")
+                return BUDGET_EXHAUSTED, usage
             messages.append({"role": "assistant", "content": result.assistant_content})
             outcomes = await asyncio.gather(
                 *(self.gateway.execute(ctx, call.name, call.input) for call in result.tool_calls)
@@ -308,7 +308,7 @@ class Orchestrator:
         model: str,
         platform: bool = True,
     ) -> None:
-        """Hook on_turn_end : historique du tour et consommation (NF-SOB)."""
+        """Hook on_turn_end : historique du tour, et consommation transmise aux extensions."""
         now = datetime.now(UTC)
         async with farm_session(self.sessions, farm_id) as session:
             # Horodatages explicites et croissants : now() est identique dans une transaction,
@@ -334,27 +334,21 @@ class Orchestrator:
             conversation = await session.get(Conversation, conversation_id)
             if conversation is not None:
                 conversation.last_message_at = now
-            stmt = insert(UsageMetric).values(
-                farm_id=farm_id,
-                day=now.date(),
-                model=model[:100],
-                tokens_in=usage.input_tokens + usage.cache_read_tokens + usage.cache_write_tokens,
-                tokens_out=usage.output_tokens,
-                cost_usd=Decimal(str(round(usage.cost_usd, 6))),
-                platform_tokens=_total(usage) if platform else 0,
-            )
-            await session.execute(
-                stmt.on_conflict_do_update(
-                    index_elements=["farm_id", "day", "model"],
-                    set_={
-                        "tokens_in": UsageMetric.tokens_in + stmt.excluded.tokens_in,
-                        "tokens_out": UsageMetric.tokens_out + stmt.excluded.tokens_out,
-                        "cost_usd": UsageMetric.cost_usd + stmt.excluded.cost_usd,
-                        "platform_tokens": UsageMetric.platform_tokens
-                        + stmt.excluded.platform_tokens,
-                    },
+            if self.on_usage is not None:
+                await self.on_usage(
+                    session,
+                    UsageEvent(
+                        farm_id=farm_id,
+                        at=now,
+                        model=model[:100],
+                        tokens_in=usage.input_tokens
+                        + usage.cache_read_tokens
+                        + usage.cache_write_tokens,
+                        tokens_out=usage.output_tokens,
+                        cost_usd=usage.cost_usd,
+                        platform=platform,
+                    ),
                 )
-            )
         log.info(
             "agent.turn",
             tokens_in=usage.input_tokens,
