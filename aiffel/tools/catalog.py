@@ -19,6 +19,7 @@ from aiffel.actions.checks import Check, basic_checks, blocking, is_phyto, phyto
 from aiffel.actions.mapping import DoseUnit, Draft, DraftInput, MappingError, slot, to_payload
 from aiffel.connectors.ekylibre.client import EkylibreError, EkylibreUnauthorized
 from aiffel.connectors.lexicon.client import LexiconError
+from aiffel.connectors.plantnet.client import NO_RESULT, SOURCE, PlantNetError
 from aiffel.tools.registry import ToolAbort, ToolContext, ToolFailure, ToolOutput, ToolSpec
 
 EKYLIBRE = "Ekylibre"
@@ -190,6 +191,51 @@ def lexicon_tools() -> list[ToolSpec]:
             requires="lexicon",
         )
         for name, spec in _LEXICON_SCHEMAS.items()
+    ]
+
+
+# --- Pl@ntNet : identification à partir des photos du message ---
+
+
+async def _plantnet(ctx: ToolContext, method: str) -> ToolOutput:
+    if ctx.plantnet is None or not ctx.photos:
+        raise ToolFailure("Aucune photo dans ce message.")
+    try:
+        matches = await getattr(ctx.plantnet, method)(ctx.photos)
+    except PlantNetError as exc:
+        raise ToolFailure(str(exc)) from None
+    data: dict[str, Any] = {"photos": len(ctx.photos), "resultats": [m.as_dict() for m in matches]}
+    if not matches:
+        data["message"] = NO_RESULT
+    return ToolOutput(data, SOURCE, licence="Citer Pl@ntNet comme source de l'identification.")
+
+
+async def _plantnet_disease(ctx: ToolContext, _args: NoInput) -> ToolOutput:
+    return await _plantnet(ctx, "identify_disease")
+
+
+async def _plantnet_species(ctx: ToolContext, _args: NoInput) -> ToolOutput:
+    return await _plantnet(ctx, "identify_species")
+
+
+def plantnet_tools() -> list[ToolSpec]:
+    return [
+        ToolSpec(
+            "plantnet_identifier_maladie",
+            "Identifie les maladies, ravageurs ou carences visibles sur la photo jointe au "
+            "message (Pl@ntNet). Renvoie des hypothèses avec un score de confiance (0 à 1).",
+            _plantnet_disease,
+            NoInput,
+            requires="plantnet",
+        ),
+        ToolSpec(
+            "plantnet_identifier_espece",
+            "Identifie l'espèce végétale de la photo jointe au message (culture, adventice, "
+            "plante de bordure) avec Pl@ntNet. Renvoie des hypothèses avec un score (0 à 1).",
+            _plantnet_species,
+            NoInput,
+            requires="plantnet",
+        ),
     ]
 
 
@@ -374,6 +420,7 @@ def phase1_tools() -> list[ToolSpec]:
             requires="ekylibre",
         ),
         *lexicon_tools(),
+        *plantnet_tools(),
         ToolSpec(
             "calc_conversion",
             "Convertit une quantité (masse, volume, surface).",

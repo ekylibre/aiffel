@@ -8,6 +8,7 @@ sont conservés (``messages``), sur une fenêtre courte.
 
 import asyncio
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Protocol
@@ -29,7 +30,8 @@ from aiffel.memory import MemoryService
 from aiffel.orchestrator.llm import LLMError, LLMProvider, SystemPrompt, Usage
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.tools.catalog import RECONNECT_REASON
-from aiffel.tools.registry import LexiconLike, ToolAbort, ToolContext, ToolGateway
+from aiffel.tools.registry import LexiconLike, PlantNetLike, ToolAbort, ToolContext, ToolGateway
+from aiffel.voice import AudioTooLargeError
 
 log = structlog.get_logger()
 
@@ -50,6 +52,13 @@ TOO_LONG = (
 VOICE_LATER = "Les messages vocaux arrivent bientôt. En attendant, écrivez-moi votre demande."
 TRANSCRIBED_NOTE = "[Message vocal transcrit automatiquement : des mots peuvent être mal reconnus]"
 PHOTO_LATER = "Je ne sais pas encore analyser les photos. Décrivez-moi ce que vous voyez."
+PHOTO_NOTE = (
+    "[Photo jointe au message : tu ne la vois pas. Les outils Pl@ntNet l'analysent ; "
+    "charge le savoir-faire diagnostiquer-photo]"
+)
+PHOTO_QUESTION = "Que montre cette photo ?"
+PHOTO_TOO_LARGE = "Cette photo est trop lourde. Envoyez-la en photo (compressée), pas en fichier."
+PHOTO_FAILED = "Je n'ai pas réussi à récupérer la photo. Renvoyez-la, s'il vous plaît."
 BUDGET_EXHAUSTED = (
     "Le crédit d'IA offert à votre ferme est épuisé. Pour continuer, l'exploitant peut ajouter "
     "sa propre clé OpenRouter ou Anthropic avec /modele."
@@ -92,6 +101,10 @@ class Orchestrator:
     # Consommation de chaque tour, transmise aux extensions (mesure, quota…).
     on_usage: UsageHook | None = None
     memory: MemoryService | None = None
+    # Photos : Pl@ntNet et le téléchargement auprès du canal (en mémoire, borné).
+    plantnet: PlantNetLike | None = None
+    fetch_photo: Callable[[str, int], Awaitable[bytes]] | None = None
+    photo_max_bytes: int = 10 * 1024 * 1024
 
     async def run_turn(
         self, caller: Caller, farm: FarmRef, message: InboundMessage
@@ -100,9 +113,15 @@ class Orchestrator:
             return []
         if message.kind is InboundKind.VOICE:
             return [OutboundMessage(text=VOICE_LATER)]
-        if message.kind is InboundKind.PHOTO and not message.text:
+        analyse_photo = (
+            message.kind is InboundKind.PHOTO
+            and self.plantnet is not None
+            and self.fetch_photo is not None
+            and bool(message.file_id)
+        )
+        if message.kind is InboundKind.PHOTO and not analyse_photo and not message.text:
             return [OutboundMessage(text=PHOTO_LATER)]
-        text = (message.text or "").strip()
+        text = (message.text or "").strip() or (PHOTO_QUESTION if analyse_photo else "")
         if not text:
             return [OutboundMessage(text="Écrivez-moi votre question. /aide")]
 
@@ -127,6 +146,17 @@ class Orchestrator:
         if access is not None and access.client is None:
             return [OutboundMessage(text=RECONNECT)]
 
+        photos: list[bytes] = []
+        if analyse_photo and self.fetch_photo is not None:
+            # Téléchargée après les contrôles d'accès et de crédit ; en mémoire le temps du tour.
+            try:
+                photos = [await self.fetch_photo(message.file_id or "", self.photo_max_bytes)]
+            except AudioTooLargeError:
+                return [OutboundMessage(text=PHOTO_TOO_LARGE)]
+            except Exception as exc:
+                log.warning("agent.photo_download_failed", error=type(exc).__name__)
+                return [OutboundMessage(text=PHOTO_FAILED)]
+
         ctx = ToolContext(
             farm_id=farm.farm_id,
             farm_name=farm.name,
@@ -139,6 +169,8 @@ class Orchestrator:
             skills={name: doc.body for name, doc in self.runtime.skills.items()},
             actions=self.actions,
             memory=self.memory,
+            plantnet=self.plantnet,
+            photos=photos,
         )
         open_proposal = (
             await self.actions.open_proposal(farm.farm_id, caller.user_id, "intervention")
@@ -149,6 +181,8 @@ class Orchestrator:
             farm.farm_id, caller.user_id, message.channel
         )
         content = f"{TRANSCRIBED_NOTE}\n{text}" if message.transcribed else text
+        if photos:
+            content = f"{PHOTO_NOTE}\n{content}"
         messages: list[dict[str, Any]] = [*history, {"role": "user", "content": content}]
 
         try:
@@ -162,7 +196,9 @@ class Orchestrator:
             log.warning("agent.llm_error", error=str(exc))
             return [OutboundMessage(text=UNAVAILABLE)]
 
-        await self._record(farm.farm_id, conversation_id, text, answer, usage, label, platform)
+        # L'historique ne garde que du texte : on y note qu'une photo accompagnait la question.
+        recorded = f"[Photo] {text}" if photos else text
+        await self._record(farm.farm_id, conversation_id, recorded, answer, usage, label, platform)
         replies = [OutboundMessage(text=answer)]
         if ctx.proposals:
             # Récapitulatif produit par le code à partir de la charge utile réelle : c'est lui que

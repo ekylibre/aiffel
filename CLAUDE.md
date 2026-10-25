@@ -104,6 +104,17 @@ le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le
 - La transcription est renvoyée à l'utilisateur (« J'ai compris : … ») puis traitée comme un texte,
   marqué `transcribed` : le modèle est prévenu que des mots peuvent être mal reconnus.
 
+## Photos (Pl@ntNet)
+
+- Une photo envoyée sur Telegram est téléchargée **en mémoire** (`AIFFEL_PHOTO_MAX_BYTES`, 10 Mo),
+  après les contrôles d'accès et de crédit, et jamais écrite sur disque. Sa légende sert de question.
+- **Le modèle ne voit pas la photo** : elle reste dans `ToolContext.photos`, que lisent seuls les
+  outils `plantnet_identifier_maladie` et `plantnet_identifier_espece` (exigence `plantnet` :
+  proposés seulement quand le message porte une photo et que `AIFFEL_PLANTNET_API_KEY` est définie).
+- Client : `aiffel/connectors/plantnet/client.py` (clé de la plateforme en paramètre `api-key`,
+  jamais dans les erreurs ni les journaux). Savoir-faire `runtime/skills/diagnostiquer-photo` :
+  nuance selon le score, cite Pl@ntNet, aucun traitement prescrit sur la seule photo.
+
 ## Modèle d'IA par ferme
 
 - Modèles proposés : `aiffel/providers/catalog.py`, **seulement ceux validés par le banc** (A7,
