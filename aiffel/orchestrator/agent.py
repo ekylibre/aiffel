@@ -50,8 +50,9 @@ VOICE_LATER = "Les messages vocaux arrivent bientôt. En attendant, écrivez-moi
 TRANSCRIBED_NOTE = "[Message vocal transcrit automatiquement : des mots peuvent être mal reconnus]"
 PHOTO_LATER = "Je ne sais pas encore analyser les photos. Décrivez-moi ce que vous voyez."
 QUOTA_EXHAUSTED = (
-    "Votre ferme a utilisé tout le crédit d'IA offert par Aiffel. Pour continuer, l'exploitant "
-    "peut ajouter sa propre clé OpenRouter ou Anthropic avec /modele."
+    "Votre ferme a utilisé tout le crédit d'IA offert par Aiffel ce mois-ci ; il sera renouvelé "
+    "le 1er du mois. Pour continuer d'ici là, l'exploitant peut ajouter sa propre clé "
+    "OpenRouter ou Anthropic avec /modele."
 )
 NO_MODEL = (
     "Aucun modèle d'IA n'est disponible pour votre ferme. L'exploitant peut en choisir un et "
