@@ -36,6 +36,7 @@ from aiffel.orchestrator.llm import AnthropicProvider, Effort, LLMProvider
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.pairing import PairingResult, PairingService
 from aiffel.providers.openrouter import OpenRouterProvider
+from aiffel.rights import RightsService
 from aiffel.settings import Settings, get_settings
 from aiffel.tools.catalog import phase1_tools, propose_tools
 from aiffel.tools.registry import ToolGateway
@@ -86,6 +87,7 @@ class Services:
             self.llm,
             self.extensions,
             self.memory,
+            RightsService(self.sessions),
         )
 
     def dispatcher(self) -> Dispatcher:

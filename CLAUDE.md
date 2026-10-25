@@ -83,6 +83,8 @@ le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le
   via `aiffel/actions/service.py` ; le récapitulatif affiché est **généré par le code**. Seul le
   callback du bouton Valider (`aiffel/channels/handlers.py`) appelle `create_intervention`, ce que
   vérifie `tests/integration/test_validated_writes.py::test_no_code_path_from_the_agent_to_an_ekylibre_write`.
+- Qui valide (F-ECR-4) : l'exploitant toujours ; un salarié si `memberships.can_validate`, que
+  l'exploitant accorde ou retire avec `/droits` (`aiffel/rights.py`, boutons `rights:t:<id>` hors modèle).
 
 ## Mémoire de la ferme (F-MEM)
 

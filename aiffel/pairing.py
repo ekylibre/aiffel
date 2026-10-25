@@ -257,6 +257,9 @@ class PairingService:
             )
         else:
             membership.role = role
+            if role == "owner":
+                # Un salarié devenu administrateur dans Ekylibre valide comme l'exploitant.
+                membership.can_validate = True
         await session.flush()
 
     @staticmethod
