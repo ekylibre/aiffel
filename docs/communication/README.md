@@ -10,7 +10,7 @@ parallèle du développement. Version 0.1 du 2026-10-24.
 | `identite.html` | Monde agricole élargi : conseillers, coopératives, chambres, OSFarm/GAIA | https://claude.ai/artifact/LaMQYdKaJWQTajen9qAwBk |
 | `fiche-a4.html`, `fiche-a4.pdf` | Agriculteurs, fiche recto à imprimer et distribuer | https://claude.ai/artifact/2aBFeCpE2F1yYP2KXBPqBq |
 | `schema.html`, `schema.pdf` | Schéma fonctionnel en tour Eiffel : agriculteur au sommet, outils dans la base | https://claude.ai/artifact/P8wiJxf5Cpsn5h5pagSy3m |
-| `site/` (racine du dépôt) | Grand public : site vitrine aiffel.org (concept, offres, garanties), déployé par `docker/compose.site.yml` | https://aiffel.org (après déploiement, voir `docs/ops/dokploy.md` §6) |
+| `site/` (racine du dépôt) | Grand public : site vitrine (concept, offres, garanties) et mentions légales, déployé par `docker/compose.site.yml` (voir `docs/ops/dokploy.md` §6) | https://aiffel.org (public, en ligne depuis le 2026-10-25) |
 | `signe.svg`, `signe-petit.svg` | Logo : version complète, et version simplifiée sous 24 px | |
 | Document commercial (doc partagé, pas de fichier) | Prospects et partenaires : offres Libre (Telegram), En ligne (app.aiffel.org) et Pro (WhatsApp) | https://claude.ai/artifact/T2TFefaA6knbLPPLAjAJKr |
 | `veille-concurrentielle.md` | Interne : comparatif Tellia, Hector, Hectar AI, xSupra, Terragrow (2026-10-25) | |
@@ -101,6 +101,12 @@ La facture reste donc une **projection** (phase 3, avec Lyvre), présentée comm
       garder ou la remplacer par une demande de précision.
 - [ ] Vérifier juridiquement la connexion par identifiants aux logiciels propriétaires (Geofolia, Smag Farmer,
       MesParcelles, Isacompta) au regard de leurs conditions d'utilisation.
-- [ ] Ajouter un QR code vers aiffel.org quand le site sera en ligne : le domaine est encore parqué.
+- [ ] Ajouter un QR code vers https://aiffel.org sur la fiche A4 et le schéma : le site est en ligne.
+- [ ] Mentions légales : ajouter le capital social et la ville du greffe du RCS d'EKYLIBRE
+      (`site/mentions-legales.html`), et vérifier l'adresse légale d'Hostinger.
+- [ ] Le site affirme « open source » alors que le dépôt `ekylibre/aiffel` est privé et sans `LICENSE` :
+      publier le dépôt sous licence, ou adoucir la formulation.
+- [ ] Vérifier que la boîte `contact@aiffel.org` (affichée sur le site) existe chez Gandi.
+- [ ] Mettre à jour le doc commercial : le point « aiffel.org est encore parqué » est réglé.
 - [ ] Le message `/aide` du bot est périmé (`aiffel/channels/handlers.py:14-20`) : à signaler côté développement.
 - [ ] Supports suivants possibles : verso questions-réponses de la fiche, deck de présentation, design system.
