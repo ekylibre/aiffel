@@ -6,7 +6,7 @@ SQL brut sans filtre.
 """
 
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -23,7 +23,6 @@ from aiffel.db.models import (
     Message,
     PendingAction,
     SourceMap,
-    UsageMetric,
     User,
 )
 from aiffel.db.session import farm_session, global_session, make_sessionmaker
@@ -80,7 +79,6 @@ async def _populate(sessions: Sessions, keyring: Keyring, farm_id: uuid.UUID) ->
             )
         )
         session.add(FarmMemory(farm_id=farm_id, kind="alias", content={"Grands Champs": "P12"}))
-        session.add(UsageMetric(farm_id=farm_id, day=date.today(), model="test"))
         await audit.append(session, farm_id, "farm.created", actor_user_id=user_id)
         return connection.id
 

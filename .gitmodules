@@ -1,0 +1,3 @@
+[submodule "extensions/aiffel-billing"]
+	path = extensions/aiffel-billing
+	url = ../aiffel-billing.git

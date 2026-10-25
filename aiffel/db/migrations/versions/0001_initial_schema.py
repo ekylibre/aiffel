@@ -11,7 +11,19 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-from aiffel.db.models import FARM_SCOPED_TABLES
+# Figée : les tables isolées créées par cette migration. Les suivantes activent leur propre RLS.
+FARM_SCOPED_TABLES = (
+    "memberships",
+    "connections",
+    "secrets",
+    "source_map",
+    "conversations",
+    "messages",
+    "pending_actions",
+    "audit_log",
+    "farm_memory",
+    "usage_metrics",
+)
 
 revision: str = "0001"
 down_revision: str | None = None

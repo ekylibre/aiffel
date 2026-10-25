@@ -66,6 +66,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             )
 
+    for extension in services.extensions if services else []:
+        for router in extension.routers:
+            app.include_router(router)
+
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "version": __version__}

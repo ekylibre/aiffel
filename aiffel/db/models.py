@@ -5,21 +5,18 @@ rôle applicatif ne voit que les lignes de la ferme fixée par ``aiffel.farm_id`
 """
 
 import uuid
-from datetime import date, datetime
-from decimal import Decimal
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
-    Date,
     DateTime,
     ForeignKey,
     Integer,
     LargeBinary,
     MetaData,
-    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -41,7 +38,6 @@ FARM_SCOPED_TABLES = (
     "pending_actions",
     "audit_log",
     "farm_memory",
-    "usage_metrics",
 )
 
 
@@ -297,23 +293,6 @@ class FarmMemory(Base):
     )
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at()
-
-
-class UsageMetric(Base):
-    __tablename__ = "usage_metrics"
-
-    farm_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("farms.id", ondelete="CASCADE"), primary_key=True
-    )
-    day: Mapped[date] = mapped_column(Date, primary_key=True)
-    model: Mapped[str] = mapped_column(String(100), primary_key=True)
-    tokens_in: Mapped[int] = mapped_column(BigInteger, server_default="0")
-    tokens_out: Mapped[int] = mapped_column(BigInteger, server_default="0")
-    stt_seconds: Mapped[int] = mapped_column(Integer, server_default="0")
-    # Coût facturé par le fournisseur quand il le renvoie (OpenRouter) ; 0 sinon.
-    cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), server_default="0")
-    # Part des jetons consommée sur la clé d'Aiffel (et non sur celle de la ferme) : sert au quota.
-    platform_tokens: Mapped[int] = mapped_column(BigInteger, server_default="0")
 
 
 INBOUND_JOB_STATUSES = ("pending", "processing", "done", "failed")

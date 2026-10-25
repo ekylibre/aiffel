@@ -44,6 +44,15 @@ class Button(BaseModel):
     url: str | None = None
 
 
+class Document(BaseModel):
+    """Fichier joint (une facture PDF…), envoyé après le texte du message."""
+
+    filename: str = Field(max_length=100)
+    content: bytes
+    mime: str = "application/pdf"
+
+
 class OutboundMessage(BaseModel):
     text: str
     buttons: list[list[Button]] = Field(default_factory=list)
+    documents: list[Document] = Field(default_factory=list)

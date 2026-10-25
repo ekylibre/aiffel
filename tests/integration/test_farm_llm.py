@@ -4,7 +4,7 @@ import re
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -21,11 +21,12 @@ from aiffel.channels.dispatcher import Caller
 from aiffel.channels.handlers import OWNER_ONLY, Handlers
 from aiffel.channels.identity import IdentityService
 from aiffel.connectors.ekylibre.auth import EkylibreInstance
-from aiffel.db.models import AuditLog, Secret, UsageMetric
+from aiffel.db.models import AuditLog, Secret
 from aiffel.db.session import farm_session, global_session
+from aiffel.extensions import CreditDecision, Extension, UsageEvent
 from aiffel.farm_context import FarmContextService, FarmRef
-from aiffel.farm_llm import FarmLLMService, LLMKeyError, QuotaExhausted
-from aiffel.orchestrator.agent import NO_MODEL, QUOTA_EXHAUSTED, Orchestrator
+from aiffel.farm_llm import FarmLLMService, LLMKeyError, NoPlatformCredit
+from aiffel.orchestrator.agent import BUDGET_EXHAUSTED, NO_MODEL, Orchestrator
 from aiffel.orchestrator.llm import AnthropicProvider, LLMResult, ToolCall, Usage
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.pairing import PURPOSE_LLM_KEY, PairingError, PairingResult, PairingService
@@ -86,7 +87,7 @@ async def env(
         await session.execute(
             text(
                 "TRUNCATE aiffel.pairing_codes, aiffel.channel_identities, aiffel.connections, "
-                "aiffel.memberships, aiffel.source_map, aiffel.secrets, aiffel.usage_metrics, "
+                "aiffel.memberships, aiffel.source_map, aiffel.secrets, "
                 "aiffel.messages, aiffel.conversations CASCADE"
             )
         )
@@ -180,7 +181,7 @@ async def test_a_farm_key_never_serves_another_farm(env: Env, keyring: Keyring) 
     assert await llm.resolve(other) is None  # ni clé de ferme, ni clé d'Aiffel
 
 
-async def test_no_usable_model_is_explained_and_cost_is_recorded(env: Env) -> None:
+async def test_no_usable_model_is_explained_and_usage_is_reported(env: Env) -> None:
     class Provider:
         async def complete(self, *_args: Any) -> LLMResult:
             return LLMResult(
@@ -192,9 +193,20 @@ async def test_no_usable_model_is_explained_and_cost_is_recorded(env: Env) -> No
                 Usage(10, 5, 0, 0, 0.0021),
             )
 
+    usage: list[UsageEvent] = []
+
+    async def on_usage(_session: object, event: UsageEvent) -> None:
+        usage.append(event)
+
     llm = env.llm(anthropic=None)
     orchestrator = Orchestrator(
-        env.sessions, env.farms, None, ToolGateway(phase1_tools()), AgentRuntime.load(), llm=llm
+        env.sessions,
+        env.farms,
+        None,
+        ToolGateway(phase1_tools()),
+        AgentRuntime.load(),
+        llm=llm,
+        on_usage=on_usage,
     )
     [reply] = await orchestrator.run_turn(
         _caller(env.owner), _farm(env.owner), _msg(kind=InboundKind.TEXT, text="?")
@@ -208,11 +220,9 @@ async def test_no_usable_model_is_explained_and_cost_is_recorded(env: Env) -> No
         await orchestrator.run_turn(
             _caller(env.owner), _farm(env.owner), _msg(kind=InboundKind.TEXT, text="?")
         )
-    async with farm_session(env.sessions, env.owner.farm_id) as session:
-        metric = await session.scalar(select(UsageMetric))
-    assert metric is not None and metric.model == "openrouter:deepseek/deepseek-v4.1-flash"
-    assert float(metric.cost_usd) == pytest.approx(0.0042)
-    assert metric.platform_tokens == 0  # clé de la ferme : rien sur le crédit d'Aiffel
+    assert [e.model for e in usage] == ["openrouter:deepseek/deepseek-v4.1-flash"] * 2
+    assert sum(e.cost_usd for e in usage) == pytest.approx(0.0042)
+    assert not any(e.platform for e in usage)  # clé de la ferme : rien sur la plateforme
 
 
 class TurnProvider:
@@ -231,16 +241,22 @@ class TurnProvider:
         )
 
 
-async def test_platform_key_is_capped_per_farm(env: Env) -> None:
-    llm = env.llm(platform_token_quota=1000)
-    # Le mois dernier ne compte pas : le crédit repart de zéro le 1er.
-    last_month = datetime.now(UTC).date().replace(day=1) - timedelta(days=1)
-    async with farm_session(env.sessions, env.owner.farm_id) as session:
-        session.add(
-            UsageMetric(
-                farm_id=env.owner.farm_id, day=last_month, model="anthropic:x", platform_tokens=5000
-            )
-        )
+@dataclass
+class CappedPolicy:
+    """Règle de crédit d'extension : plafond par tour, ou refus avec un message."""
+
+    budget: int | None
+    allowed: bool = True
+
+    async def platform_credit(self, _session: object, _farm_id: uuid.UUID) -> CreditDecision:
+        message = None if self.allowed else "Crédit épuisé : ajoutez votre clé."
+        return CreditDecision(self.allowed, message, self.budget)
+
+
+async def test_a_credit_policy_caps_and_refuses_the_platform_key(env: Env) -> None:
+    policy = CappedPolicy(budget=300)
+    llm = env.llm()
+    llm.credit_policy = policy
     orchestrator = Orchestrator(
         env.sessions, env.farms, None, ToolGateway(phase1_tools()), AgentRuntime.load(), llm=llm
     )
@@ -253,27 +269,38 @@ async def test_platform_key_is_capped_per_farm(env: Env) -> None:
         )
         return reply.text
 
-    assert await turn() == "ok"  # 700 jetons sur 1 000
+    assert await turn() == "ok"
     assert (await llm.resolve(env.owner.farm_id)).token_budget == 300  # type: ignore[union-attr]
     provider.tool = True
-    assert await turn() == QUOTA_EXHAUSTED  # arrêt en cours de tour, une fois le crédit dépassé
-    assert await llm.allowance(env.owner.farm_id) == (1400, 1000)
-    with pytest.raises(QuotaExhausted):
+    assert await turn() == BUDGET_EXHAUSTED  # arrêt en cours de tour, une fois le plafond atteint
+    policy.allowed = False
+    with pytest.raises(NoPlatformCredit, match="Crédit épuisé"):
         await llm.resolve(env.owner.farm_id)
-    assert await turn() == QUOTA_EXHAUSTED
+    assert await turn() == "Crédit épuisé : ajoutez votre clé."
 
-    [menu] = await env.handlers(llm).paired(
-        _caller(env.owner), _msg(kind=InboundKind.COMMAND, command="modele")
-    )
-    assert "1\u202f000 jetons utilisés ce mois-ci sur 1\u202f000" in menu.text
-
-    # Avec sa propre clé, la ferme n'est plus limitée.
+    # Avec sa propre clé, la ferme n'est plus soumise à la règle de crédit.
     await llm.save_key(env.owner.farm_id, env.owner.user_id, "anthropic", SecretValue(FARM_KEY))
     resolved = await llm.resolve(env.owner.farm_id)
     assert resolved is not None and resolved.own_key and resolved.token_budget is None
     provider.tool = False
     assert await turn() == "ok"
-    assert await llm.allowance(env.owner.farm_id) == (1400, 1000)
+
+
+async def test_extensions_add_lines_to_the_model_menu(env: Env) -> None:
+    async def lines(farm_id: uuid.UUID) -> list[str]:
+        return [f"Crédit de la plateforme : ferme reconnue = {farm_id == env.owner.farm_id}"]
+
+    handlers = Handlers(
+        env.pairing,
+        env.farms,
+        "https://app.aiffel.org",
+        llm=env.llm(),
+        extensions=[Extension("mesure", llm_menu_lines=lines)],
+    )
+    [menu] = await handlers.paired(
+        _caller(env.owner), _msg(kind=InboundKind.COMMAND, command="modele")
+    )
+    assert "Crédit de la plateforme : ferme reconnue = True" in menu.text
 
 
 async def test_model_menu_and_buttons_are_for_the_owner_only(env: Env) -> None:

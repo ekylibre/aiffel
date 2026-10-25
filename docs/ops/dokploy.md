@@ -49,7 +49,7 @@ Toutes se saisissent dans l'onglet « Environment » de Dokploy, pas dans `.env`
 
 Variables facultatives (valeur par défaut dans `compose.dokploy.yml`) :
 `AIFFEL_LOG_LEVEL`, `AIFFEL_LLM_PROVIDER`, `AIFFEL_LLM_MODEL`, `AIFFEL_LLM_EFFORT`,
-`AIFFEL_PLATFORM_TOKEN_QUOTA`, `AIFFEL_EKYLIBRE_ALLOWED_DOMAINS`, `AIFFEL_STT_ENABLED`.
+`AIFFEL_EKYLIBRE_ALLOWED_DOMAINS`, `AIFFEL_STT_ENABLED`.
 
 ### Domaine
 

@@ -19,6 +19,11 @@ REDACTED_KEYS = frozenset(
         "content",
         "email",
         "chat_id",
+        "iban",
+        "siret",
+        "vat_number",
+        "legal_name",
+        "to",
     }
 )
 

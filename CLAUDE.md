@@ -86,8 +86,8 @@ le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le
 
 ## Vocal (A6)
 
-- `aiffel/voice.py` : `VoiceService` (durée maximale vérifiée **avant** le téléchargement, comptage
-  `usage_metrics.stt_seconds` sous le modèle `stt`) et `WhisperTranscriber` (configuration de Duke :
+- `aiffel/voice.py` : `VoiceService` (durée maximale vérifiée **avant** le téléchargement, durée
+  transmise aux extensions sous le modèle `stt`) et `WhisperTranscriber` (configuration de Duke :
   *small*, `int8`, CPU, `fr`, VAD, `beam_size=5`). Le modèle se charge au premier vocal.
 - L'audio reste en mémoire et n'est jamais écrit sur disque ; PyAV décode l'OGG/Opus (pas de ffmpeg).
 - La transcription est renvoyée à l'utilisateur (« J'ai compris : … ») puis traitée comme un texte,
@@ -99,15 +99,27 @@ le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le
   `tests/eval/`). Sans choix, la ferme garde `AIFFEL_LLM_PROVIDER` / `AIFFEL_LLM_MODEL`.
 - `aiffel/farm_llm.py` : choix rangé dans `farms.settings["llm"]` ; clé propre de la ferme dans le
   coffre (connexion `llm:<fournisseur>`, secret `api_key`), vérifiée chez le fournisseur avant
-  d'être enregistrée. Sans clé de ferme, la clé d'Aiffel sert, dans la limite de
-  `AIFFEL_PLATFORM_TOKEN_QUOTA` jetons par ferme et par mois civil (1 M par défaut, cache compris,
-  remis à zéro le 1er en UTC) ; au-delà,
-  l'agent demande à l'exploitant d'ajouter sa clé. Sans aucune clé : retour au modèle par défaut.
+  d'être enregistrée. Sans clé de ferme, la clé de la plateforme sert, si la règle de crédit d'une
+  extension l'accepte (sans extension : sans limite) ; sinon l'agent affiche le message de
+  l'extension. Sans aucune clé : retour au modèle par défaut.
 - `/modele` sur Telegram (boutons pour l'exploitant seulement) ; la clé se saisit sur la page
   `/cle`, ouverte par un lien à usage unique (`pairing_codes.purpose = 'llm_key'`), **jamais dans la
   conversation**.
-- Consommation : `usage_metrics` par ferme, jour et `fournisseur:modèle`, avec `cost_usd` quand le
-  fournisseur le renvoie (OpenRouter), et `platform_tokens` (part consommée sur la clé d'Aiffel).
+- Consommation : chaque tour et chaque transcription produisent un `UsageEvent` (jetons, coût quand
+  le fournisseur le renvoie, clé de la plateforme ou non), transmis aux extensions ; le cœur ne la
+  stocke pas.
+
+## Extensions
+
+- `aiffel/extensions.py` : un paquet installé qui déclare l'entry point `aiffel.extensions` ajoute
+  commandes Telegram, boutons (préfixe de `callback_data`), lignes d'aide et du menu `/modele`,
+  routes web, outils (passés par la passerelle), règle de crédit (`CreditPolicy`), hooks de création
+  de ferme et de consommation. Ses tables viennent de ses migrations (`aiffel.migrations`), lancées
+  par `aiffel.db.deploy` après celles du cœur.
+- `extensions/` : un sous-dossier par extension, souvent un sous-module git **privé** ; l'image
+  Docker installe ce qui s'y trouve. Le cœur ne doit **jamais** importer une extension.
+- `aiffel.testing` : fixtures pytest (base migrée, rôle applicatif, `create_farm`) pour les tests
+  du cœur et des extensions.
 
 ## Conventions
 

@@ -8,9 +8,11 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from aiffel.db.models import SCHEMA, Base
+from aiffel.extensions import extension_tables
 from aiffel.settings import get_settings
 
 target_metadata = Base.metadata
+EXTENSION_TABLES = extension_tables()
 
 
 def _url() -> str:
@@ -28,7 +30,8 @@ def _include_name(name: str | None, type_: str, _parent_names: object) -> bool:
     # Alembic ne gère que le schéma aiffel (ni public, ni sa propre table de version).
     if type_ == "schema":
         return name == SCHEMA
-    return not (type_ == "table" and name == "alembic_version")
+    # Les tables des extensions installées relèvent de leurs propres migrations.
+    return not (type_ == "table" and (name == "alembic_version" or name in EXTENSION_TABLES))
 
 
 def _run(connection: Connection) -> None:

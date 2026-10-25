@@ -73,7 +73,7 @@ async def farm(
             text(
                 "TRUNCATE aiffel.pairing_codes, aiffel.channel_identities, aiffel.connections, "
                 "aiffel.memberships, aiffel.source_map, aiffel.secrets, aiffel.messages, "
-                "aiffel.conversations, aiffel.usage_metrics, aiffel.farm_memory, "
+                "aiffel.conversations, aiffel.farm_memory, "
                 "aiffel.pending_actions CASCADE"
             )
         )

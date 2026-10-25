@@ -4,9 +4,9 @@
   défaut d'Aiffel.
 - La clé d'une ferme est un secret du coffre (ADR-06), porté par une connexion ``llm:<fournisseur>``
   de la ferme. Elle n'est déchiffrée qu'ici, au moment de construire le fournisseur du tour.
-- Sans clé propre, la clé d'Aiffel (``AIFFEL_*_API_KEY``) sert, si elle existe, dans la limite de
-  ``AIFFEL_PLATFORM_TOKEN_QUOTA`` jetons par ferme et par mois civil (UTC) ; sinon le modèle n'est
-  pas utilisable et la ferme retombe sur le modèle par défaut.
+- Sans clé propre, la clé de la plateforme (``AIFFEL_*_API_KEY``) sert, si elle existe et si la
+  règle de crédit d'une extension l'accepte (abonnement, quota…) ; sinon le modèle n'est pas
+  utilisable et la ferme retombe sur le modèle par défaut.
 """
 
 from __future__ import annotations
@@ -15,18 +15,18 @@ import hashlib
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import cast
 
 import anthropic
 import httpx
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aiffel.db import audit
-from aiffel.db.models import Connection, Farm, UsageMetric
+from aiffel.db.models import Connection, Farm
 from aiffel.db.session import farm_session
+from aiffel.extensions import CreditDecision, CreditPolicy
 from aiffel.orchestrator.llm import AnthropicProvider, LLMProvider
 from aiffel.providers.catalog import PROVIDERS, ModelChoice, ProviderName, by_key
 from aiffel.providers.keys import KeyCheckError, verify_key
@@ -47,12 +47,22 @@ MIN_KEY_LENGTH = 20
 KeyVerifier = Callable[[ProviderName, SecretValue], Awaitable[bool]]
 
 
+NO_PLATFORM_CREDIT = (
+    "Le crédit d'IA offert par Aiffel n'est pas disponible pour votre ferme. L'exploitant peut "
+    "ajouter sa propre clé avec /modele."
+)
+
+
 class LLMKeyError(Exception):
     """Message destiné à l'utilisateur, sans la clé."""
 
 
-class QuotaExhausted(Exception):
-    """La ferme a consommé les jetons offerts sur la clé d'Aiffel et n'a pas de clé propre."""
+class NoPlatformCredit(Exception):
+    """La règle de crédit (extension) refuse la clé d'Aiffel à cette ferme ; message pour elle."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 @dataclass(frozen=True)
@@ -66,9 +76,9 @@ class FarmLLM:
 @dataclass(frozen=True)
 class ResolvedLLM:
     provider: LLMProvider
-    label: str  # « fournisseur:modèle », clé de usage_metrics
+    label: str  # « fournisseur:modèle »
     own_key: bool
-    # Jetons encore offerts sur la clé d'Aiffel (plafond du tour) ; None : pas de limite.
+    # Jetons encore permis sur la clé de la plateforme (plafond du tour) ; None : pas de limite.
     token_budget: int | None = None
 
 
@@ -79,6 +89,8 @@ class FarmLLMService:
     settings: Settings
     http: httpx.AsyncClient
     verifier: KeyVerifier | None = None
+    # Règle de crédit d'une extension (abonnement, quota…) ; sans elle, la clé sert sans limite.
+    credit_policy: CreditPolicy | None = None
     _anthropic: dict[str, anthropic.AsyncAnthropic] = field(default_factory=dict, repr=False)
 
     # --- Lecture -----------------------------------------------------------------------------
@@ -109,49 +121,28 @@ class FarmLLMService:
             if wanted is not None:
                 candidates.append((wanted.provider, wanted.model))
             candidates.append((self.settings.llm_provider, self.settings.llm_model))
-            remaining = self._remaining(await self._platform_tokens(session))
-            exhausted = False
+            credit: CreditDecision | None = None
             for provider, model in candidates:
                 own = await self._key(session, farm_id, provider)
                 key = own or self.platform_key(provider)
                 if key is None:
                     continue
-                if own is None and remaining is not None and remaining <= 0:
-                    exhausted = True
-                    continue
+                if own is None and self.credit_policy is not None:
+                    if credit is None:
+                        credit = await self.credit_policy.platform_credit(session, farm_id)
+                    if not credit.allowed:
+                        continue
                 if wanted is not None and (provider, model) != (wanted.provider, wanted.model):
                     log.warning("llm.choice_unusable", provider=wanted.provider)
                 return ResolvedLLM(
                     self._build(provider, model, key),
                     f"{provider}:{model}",
                     own is not None,
-                    None if own is not None else remaining,
+                    None if own is not None or credit is None else credit.token_budget,
                 )
-        if exhausted:
-            raise QuotaExhausted
+        if credit is not None and not credit.allowed:
+            raise NoPlatformCredit(credit.message or NO_PLATFORM_CREDIT)
         return None
-
-    async def allowance(self, farm_id: uuid.UUID) -> tuple[int, int] | None:
-        """Jetons consommés ce mois-ci sur la clé d'Aiffel et quota ; ``None`` sans limite."""
-        if self.settings.platform_token_quota is None:
-            return None
-        async with farm_session(self.sessions, farm_id) as session:
-            return await self._platform_tokens(session), self.settings.platform_token_quota
-
-    def _remaining(self, used: int) -> int | None:
-        quota = self.settings.platform_token_quota
-        return None if quota is None else max(0, quota - used)
-
-    @staticmethod
-    async def _platform_tokens(session: AsyncSession) -> int:
-        """Jetons du mois civil en cours (UTC, comme ``usage_metrics.day``) : zéro le 1er."""
-        month_start = datetime.now(UTC).date().replace(day=1)
-        total = await session.scalar(
-            select(func.coalesce(func.sum(UsageMetric.platform_tokens), 0)).where(
-                UsageMetric.day >= month_start
-            )
-        )
-        return int(total or 0)
 
     # --- Écriture (exploitant) ---------------------------------------------------------------
 
