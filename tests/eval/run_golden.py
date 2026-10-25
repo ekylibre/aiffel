@@ -17,6 +17,7 @@ import json
 import random
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -26,6 +27,7 @@ from aiffel.logging import configure_logging
 from aiffel.orchestrator.agent import Orchestrator
 from aiffel.orchestrator.llm import LLMError
 from aiffel.orchestrator.runtime import AgentRuntime
+from aiffel.providers.openrouter import OpenRouterProvider
 from aiffel.settings import Settings
 from aiffel.tools.catalog import phase1_tools, propose_tools
 from aiffel.tools.registry import ToolGateway
@@ -105,6 +107,15 @@ def write_csv(rows: list[Row], path: Path, model: str, effort: str) -> None:
             )
 
 
+def provider_for(settings: Settings, model: str, effort: str, allow: bool) -> Any:
+    provider = make_provider(settings, model, effort)  # type: ignore[arg-type]
+    if isinstance(provider, OpenRouterProvider):
+        provider.allow_data_collection = allow
+        # Évaluation : on attend plus longtemps la fin d'une limite de débit en amont.
+        provider.retry_delays = (5.0, 15.0, 30.0, 60.0, 90.0)
+    return provider
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--corpus", type=Path, default=DUKE_CORPUS)
@@ -116,6 +127,14 @@ async def main() -> None:
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--no-lexicon", action="store_true")
     parser.add_argument("--provider", choices=("anthropic", "openrouter"), default=None)
+    parser.add_argument(
+        "--allow-data-collection",
+        action="store_true",
+        help="hébergeurs qui conservent les requêtes acceptés (modèles gratuits, corpus fictif)",
+    )
+    parser.add_argument(
+        "--skip-done", type=Path, action="append", default=[], help="rapport : phrases déjà jouées"
+    )
     parser.add_argument("--budget", type=float, default=5.0, help="plafond de dépense en $")
     args = parser.parse_args()
 
@@ -129,6 +148,12 @@ async def main() -> None:
         raise SystemExit(f"Clé d'API manquante pour {settings.llm_provider} dans .env")
 
     corpus = pick(load_corpus(args.corpus), args.limit, args.seed)
+    done = {
+        line["phrase"]
+        for report in args.skip_done
+        for line in csv.DictReader(report.open(encoding="utf-8"))
+    }
+    corpus = [entry for entry in corpus if entry.text not in done]
     procedures = load_procedures()
     if len(procedures) < 10:
         print("⚠️ fixtures/procedures.json absent : 2 procédures seulement (snapshot_procedures).")
@@ -147,7 +172,7 @@ async def main() -> None:
             orchestrator = Orchestrator(
                 None,  # type: ignore[arg-type]  # pas de base : ni historique ni mémoire
                 None,  # type: ignore[arg-type]
-                make_provider(settings, model, effort),  # type: ignore[arg-type]
+                provider_for(settings, model, effort, args.allow_data_collection),
                 ToolGateway([*phase1_tools(), *propose_tools()]),
                 runtime,
                 lexicon=lexicon,

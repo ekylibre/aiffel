@@ -37,6 +37,15 @@ from aiffel.vault import Keyring, SecretStore, SecretValue
 from aiffel.vault.crypto import new_wrapped_data_key
 
 PAIRING_MAX_ATTEMPTS = 5
+# Objets des liens à usage unique envoyés sur Telegram.
+PURPOSE_PAIR = "pair"
+PURPOSE_LLM_KEY = "llm_key"
+EXPIRED = {
+    PURPOSE_PAIR: "Ce lien n'est plus valable. Envoyez /start à Aiffel sur Telegram "
+    "pour en recevoir un nouveau.",
+    PURPOSE_LLM_KEY: "Ce lien n'est plus valable. Envoyez /modele à Aiffel sur Telegram "
+    "pour en recevoir un nouveau.",
+}
 CONNECTOR = "ekylibre"
 # Noms de types de secrets (pas des secrets).
 SECRET_TOKEN = "simple_token"  # noqa: S105
@@ -76,42 +85,57 @@ class PairingService:
     http: httpx.AsyncClient
     ttl: timedelta = timedelta(minutes=15)
 
-    async def create_code(self, identity_id: uuid.UUID) -> str:
-        """Nouveau code pour cette identité ; les codes précédents non utilisés sont annulés."""
+    async def create_code(self, identity_id: uuid.UUID, purpose: str = PURPOSE_PAIR) -> str:
+        """Nouveau code pour cette identité et cet objet ; annule les précédents inutilisés."""
         code = secrets.token_urlsafe(24)
         now = datetime.now(UTC)
         async with global_session(self.sessions) as session:
             await session.execute(
                 text(
                     "UPDATE aiffel.pairing_codes SET used_at = :now "
-                    "WHERE channel_identity_id = :i AND used_at IS NULL"
+                    "WHERE channel_identity_id = :i AND purpose = :p AND used_at IS NULL"
                 ),
-                {"now": now, "i": identity_id},
+                {"now": now, "i": identity_id, "p": purpose},
             )
             session.add(
                 PairingCode(
                     code_hash=_hash_code(code),
                     channel_identity_id=identity_id,
                     expires_at=now + self.ttl,
+                    purpose=purpose,
                 )
             )
         return code
 
-    async def check_code(self, code: str) -> uuid.UUID:
-        """Identité associée à un code encore valide ; sinon :class:`PairingError`."""
+    async def check_code(self, code: str, purpose: str = PURPOSE_PAIR) -> uuid.UUID:
+        """Identité d'un code encore valide pour cet objet ; sinon :class:`PairingError`."""
         async with global_session(self.sessions) as session:
             row = await session.get(PairingCode, _hash_code(code))
             if (
                 row is None
+                or row.purpose != purpose
                 or row.used_at is not None
                 or row.expires_at <= datetime.now(UTC)
                 or row.attempts >= PAIRING_MAX_ATTEMPTS
             ):
-                raise PairingError(
-                    "Ce lien n'est plus valable. Envoyez /start à Aiffel sur Telegram "
-                    "pour en recevoir un nouveau."
-                )
+                raise PairingError(EXPIRED[purpose])
             return row.channel_identity_id
+
+    async def use_code(self, code: str, purpose: str) -> uuid.UUID:
+        """Consomme un code valide (une seule fois, même en cas de requêtes simultanées)."""
+        identity_id = await self.check_code(code, purpose)
+        async with global_session(self.sessions) as session:
+            row = await session.get(PairingCode, _hash_code(code), with_for_update=True)
+            if row is None or row.used_at is not None:
+                raise PairingError(EXPIRED[purpose])
+            row.used_at = datetime.now(UTC)
+        return identity_id
+
+    async def user_of(self, identity_id: uuid.UUID) -> uuid.UUID | None:
+        """Utilisateur relié à une identité de messagerie (``None`` si elle n'est pas appairée)."""
+        async with global_session(self.sessions) as session:
+            identity = await session.get(ChannelIdentity, identity_id)
+            return identity.user_id if identity else None
 
     async def record_failure(self, code: str) -> None:
         async with global_session(self.sessions) as session:
@@ -152,7 +176,7 @@ class PairingService:
             # Les tables globales (codes, identités, utilisateurs) restent accessibles ici :
             # tout l'appairage tient en une transaction.
             pairing = await session.get(PairingCode, _hash_code(code), with_for_update=True)
-            if pairing is None or pairing.used_at is not None:
+            if pairing is None or pairing.used_at is not None or pairing.purpose != PURPOSE_PAIR:
                 raise PairingError("Ce lien vient d'être utilisé. Envoyez /start pour recommencer.")
             pairing.used_at = datetime.now(UTC)
 

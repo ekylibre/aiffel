@@ -6,6 +6,7 @@ Aiffel est un orchestrateur conversationnel qui fédère les logiciels d'une exp
 - Exigences : `docs/requirements.md`
 - Architecture phase 1 (ADR) : `docs/architecture/phase1.md`
 - Plan d'implémentation : `claudedocs/workflow_phase1_prototype.md`
+- Déploiement Dokploy : `docs/ops/dokploy.md`
 
 ## Commandes
 
@@ -21,7 +22,12 @@ uv run uvicorn aiffel.app.main:app --reload    # application en local (rôle aif
 uv run python -m aiffel.worker                  # worker de la file des messages entrants
 uv run python -m aiffel.channels.telegram.poll  # dev : Telegram en polling (bot de test, sans webhook)
 docker build -f docker/Dockerfile -t aiffel .  # image
+docker compose -f docker/compose.dokploy.yml config   # vérifie la stack de production (Dokploy)
 ```
+
+Déploiement : `docker/compose.dokploy.yml` est la stack Dokploy (db, migrate, app, worker). Le
+service `migrate` lance `python -m aiffel.db.deploy` (alembic + mot de passe `aiffel_app`). Après
+le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le webhook.
 
 ## Organisation
 
@@ -86,6 +92,22 @@ docker build -f docker/Dockerfile -t aiffel .  # image
 - L'audio reste en mémoire et n'est jamais écrit sur disque ; PyAV décode l'OGG/Opus (pas de ffmpeg).
 - La transcription est renvoyée à l'utilisateur (« J'ai compris : … ») puis traitée comme un texte,
   marqué `transcribed` : le modèle est prévenu que des mots peuvent être mal reconnus.
+
+## Modèle d'IA par ferme
+
+- Modèles proposés : `aiffel/providers/catalog.py`, **seulement ceux validés par le banc** (A7,
+  `tests/eval/`). Sans choix, la ferme garde `AIFFEL_LLM_PROVIDER` / `AIFFEL_LLM_MODEL`.
+- `aiffel/farm_llm.py` : choix rangé dans `farms.settings["llm"]` ; clé propre de la ferme dans le
+  coffre (connexion `llm:<fournisseur>`, secret `api_key`), vérifiée chez le fournisseur avant
+  d'être enregistrée. Sans clé de ferme, la clé d'Aiffel sert, dans la limite de
+  `AIFFEL_PLATFORM_TOKEN_QUOTA` jetons par ferme et par mois civil (1 M par défaut, cache compris,
+  remis à zéro le 1er en UTC) ; au-delà,
+  l'agent demande à l'exploitant d'ajouter sa clé. Sans aucune clé : retour au modèle par défaut.
+- `/modele` sur Telegram (boutons pour l'exploitant seulement) ; la clé se saisit sur la page
+  `/cle`, ouverte par un lien à usage unique (`pairing_codes.purpose = 'llm_key'`), **jamais dans la
+  conversation**.
+- Consommation : `usage_metrics` par ferme, jour et `fournisseur:modèle`, avec `cost_usd` quand le
+  fournisseur le renvoie (OpenRouter), et `platform_tokens` (part consommée sur la clé d'Aiffel).
 
 ## Conventions
 

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from aiffel import __version__
 from aiffel.app.container import Services, build_services, is_fully_configured
 from aiffel.app.telegram_routes import telegram_router
-from aiffel.app.web_routes import web_router
+from aiffel.app.web_routes import llm_key_router, web_router
 from aiffel.db.session import make_engine, make_sessionmaker
 from aiffel.logging import configure_logging
 from aiffel.settings import Settings, get_settings
@@ -55,6 +55,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 secure_cookies=settings.public_base_url.startswith("https://"),
             )
         )
+        if services.llm is not None:
+            app.include_router(
+                llm_key_router(
+                    services.pairing,
+                    services.farms,
+                    services.llm,
+                    services.notify,
+                    secure_cookies=settings.public_base_url.startswith("https://"),
+                )
+            )
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:

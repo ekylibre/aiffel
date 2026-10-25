@@ -1,0 +1,118 @@
+# Stack de production Aiffel pour Dokploy.
+#
+# Services :
+#   - db       : Postgres 16, propriétaire ``aiffel``, volume nommé ``aiffel-db-data``.
+#   - migrate  : alembic upgrade head + ALTER ROLE aiffel_app LOGIN PASSWORD, puis s'arrête.
+#   - app      : FastAPI (webhook Telegram, pages de raccordement et de clé LLM) sur le port 8000.
+#   - worker   : traite la file des messages Telegram ; aucun port exposé.
+#
+# Réseaux :
+#   - aiffel-internal : interne, utilisé par db ↔ app/worker/migrate.
+#   - dokploy-network : réseau public géré par Dokploy (Traefik), rattaché seulement à l'app.
+#
+# Variables à définir dans Dokploy avant le premier déploiement : voir docs/ops/dokploy.md.
+
+name: aiffel
+
+x-app-image: &app-image
+  image: ${AIFFEL_IMAGE:-aiffel:local}
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+
+x-app-env: &app-env
+  AIFFEL_ENV: production
+  AIFFEL_LOG_LEVEL: ${AIFFEL_LOG_LEVEL:-INFO}
+  AIFFEL_PUBLIC_BASE_URL: ${AIFFEL_PUBLIC_BASE_URL:?requise (ex. https://app.aiffel.org)}
+  AIFFEL_DATABASE_URL: postgresql+psycopg://aiffel_app:${AIFFEL_APP_PASSWORD:?requise}@db:5432/aiffel
+  AIFFEL_EKYLIBRE_ALLOWED_DOMAINS: ${AIFFEL_EKYLIBRE_ALLOWED_DOMAINS:-["ekylibre-dev.com","ekylibre.com"]}
+  AIFFEL_MASTER_KEY: ${AIFFEL_MASTER_KEY:?requise}
+  AIFFEL_HASH_SALT: ${AIFFEL_HASH_SALT:?requise}
+  AIFFEL_TELEGRAM_BOT_TOKEN: ${AIFFEL_TELEGRAM_BOT_TOKEN:?requise}
+  AIFFEL_TELEGRAM_WEBHOOK_SECRET: ${AIFFEL_TELEGRAM_WEBHOOK_SECRET:?requise}
+  AIFFEL_ANTHROPIC_API_KEY: ${AIFFEL_ANTHROPIC_API_KEY:-}
+  AIFFEL_OPENROUTER_API_KEY: ${AIFFEL_OPENROUTER_API_KEY:-}
+  AIFFEL_LLM_PROVIDER: ${AIFFEL_LLM_PROVIDER:-anthropic}
+  AIFFEL_LLM_MODEL: ${AIFFEL_LLM_MODEL:-claude-opus-5-5}
+  AIFFEL_LLM_EFFORT: ${AIFFEL_LLM_EFFORT:-medium}
+  AIFFEL_PLATFORM_TOKEN_QUOTA: ${AIFFEL_PLATFORM_TOKEN_QUOTA:-1000000}
+  AIFFEL_STT_ENABLED: ${AIFFEL_STT_ENABLED:-true}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aiffel
+      POSTGRES_USER: aiffel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?requise}
+    volumes:
+      - aiffel-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiffel -d aiffel"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - aiffel-internal
+
+  migrate:
+    <<: *app-image
+    command: ["python", "-m", "aiffel.db.deploy"]
+    environment:
+      AIFFEL_MIGRATION_DATABASE_URL: postgresql+psycopg://aiffel:${POSTGRES_PASSWORD}@db:5432/aiffel
+      AIFFEL_APP_PASSWORD: ${AIFFEL_APP_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - aiffel-internal
+
+  app:
+    <<: *app-image
+    environment:
+      <<: *app-env
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - aiffel-internal
+      - dokploy-network
+
+  worker:
+    <<: *app-image
+    command: ["python", "-m", "aiffel.worker"]
+    environment:
+      <<: *app-env
+    # Le HEALTHCHECK de l'image interroge /healthz : le worker n'écoute aucun port.
+    healthcheck:
+      disable: true
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - aiffel-internal
+
+volumes:
+  aiffel-db-data:
+
+networks:
+  aiffel-internal:
+    driver: bridge
+  dokploy-network:
+    external: true

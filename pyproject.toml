@@ -24,7 +24,8 @@ dependencies = [
 
 [project.optional-dependencies]
 # Transcription des vocaux (A6) : ctranslate2 et PyAV, environ 200 Mo, plus le modèle téléchargé.
-stt = ["faster-whisper>=1.1"]
+# PyAV 19 a retiré l'option metadata_errors qu'emploie faster-whisper 1.2 pour décoder l'audio.
+stt = ["faster-whisper>=1.1", "av>=11,<19"]
 
 [dependency-groups]
 dev = [

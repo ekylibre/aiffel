@@ -12,10 +12,12 @@ import structlog
 
 from aiffel import queue
 from aiffel.app.container import build_services
+from aiffel.channels.telegram.api import TelegramError
 from aiffel.channels.telegram.parse import CHANNEL
 from aiffel.db.session import global_session
 
 log = structlog.get_logger()
+RETRY_DELAY_S = 5.0
 
 
 async def _main() -> None:
@@ -27,7 +29,15 @@ async def _main() -> None:
     log.info("polling.started")
     try:
         while True:
-            updates = await services.telegram.get_updates(offset)
+            try:
+                updates = await services.telegram.get_updates(offset)
+            except TelegramError as exc:
+                if "409" in str(exc):  # webhook actif : on ne le supprime jamais (voir plus haut)
+                    raise
+                # Erreur passagère de Telegram (502, coupure réseau) : on réessaie.
+                log.warning("polling.retry", error=str(exc))
+                await asyncio.sleep(RETRY_DELAY_S)
+                continue
             for update in updates:
                 offset = int(update["update_id"]) + 1
                 async with global_session(services.sessions) as session:
