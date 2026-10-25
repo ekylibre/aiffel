@@ -4,7 +4,7 @@ import re
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -233,6 +233,14 @@ class TurnProvider:
 
 async def test_platform_key_is_capped_per_farm(env: Env) -> None:
     llm = env.llm(platform_token_quota=1000)
+    # Le mois dernier ne compte pas : le crédit repart de zéro le 1er.
+    last_month = datetime.now(UTC).date().replace(day=1) - timedelta(days=1)
+    async with farm_session(env.sessions, env.owner.farm_id) as session:
+        session.add(
+            UsageMetric(
+                farm_id=env.owner.farm_id, day=last_month, model="anthropic:x", platform_tokens=5000
+            )
+        )
     orchestrator = Orchestrator(
         env.sessions, env.farms, None, ToolGateway(phase1_tools()), AgentRuntime.load(), llm=llm
     )
@@ -257,7 +265,7 @@ async def test_platform_key_is_capped_per_farm(env: Env) -> None:
     [menu] = await env.handlers(llm).paired(
         _caller(env.owner), _msg(kind=InboundKind.COMMAND, command="modele")
     )
-    assert "1\u202f000 jetons utilisés sur 1\u202f000" in menu.text
+    assert "1\u202f000 jetons utilisés ce mois-ci sur 1\u202f000" in menu.text
 
     # Avec sa propre clé, la ferme n'est plus limitée.
     await llm.save_key(env.owner.farm_id, env.owner.user_id, "anthropic", SecretValue(FARM_KEY))

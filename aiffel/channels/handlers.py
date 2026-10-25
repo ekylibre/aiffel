@@ -198,7 +198,7 @@ class Handlers:
             lines += [
                 "",
                 f"Crédit offert par Aiffel (sans clé propre) : {_tokens(min(used, quota))} jetons "
-                f"utilisés sur {_tokens(quota)}.",
+                f"utilisés ce mois-ci sur {_tokens(quota)}, remis à zéro le 1er du mois.",
             ]
         if farm.role != "owner":
             return [OutboundMessage(text="\n".join([*lines, "", OWNER_ONLY]))]

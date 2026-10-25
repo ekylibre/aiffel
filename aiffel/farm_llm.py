@@ -5,8 +5,8 @@
 - La clé d'une ferme est un secret du coffre (ADR-06), porté par une connexion ``llm:<fournisseur>``
   de la ferme. Elle n'est déchiffrée qu'ici, au moment de construire le fournisseur du tour.
 - Sans clé propre, la clé d'Aiffel (``AIFFEL_*_API_KEY``) sert, si elle existe, dans la limite de
-  ``AIFFEL_PLATFORM_TOKEN_QUOTA`` jetons par ferme (au total) ; sinon le modèle n'est pas
-  utilisable et la ferme retombe sur le modèle par défaut.
+  ``AIFFEL_PLATFORM_TOKEN_QUOTA`` jetons par ferme et par mois civil (UTC) ; sinon le modèle n'est
+  pas utilisable et la ferme retombe sur le modèle par défaut.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import hashlib
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import cast
 
 import anthropic
@@ -131,7 +132,7 @@ class FarmLLMService:
         return None
 
     async def allowance(self, farm_id: uuid.UUID) -> tuple[int, int] | None:
-        """Jetons consommés sur la clé d'Aiffel et quota ; ``None`` sans limite."""
+        """Jetons consommés ce mois-ci sur la clé d'Aiffel et quota ; ``None`` sans limite."""
         if self.settings.platform_token_quota is None:
             return None
         async with farm_session(self.sessions, farm_id) as session:
@@ -143,8 +144,12 @@ class FarmLLMService:
 
     @staticmethod
     async def _platform_tokens(session: AsyncSession) -> int:
+        """Jetons du mois civil en cours (UTC, comme ``usage_metrics.day``) : zéro le 1er."""
+        month_start = datetime.now(UTC).date().replace(day=1)
         total = await session.scalar(
-            select(func.coalesce(func.sum(UsageMetric.platform_tokens), 0))
+            select(func.coalesce(func.sum(UsageMetric.platform_tokens), 0)).where(
+                UsageMetric.day >= month_start
+            )
         )
         return int(total or 0)
 

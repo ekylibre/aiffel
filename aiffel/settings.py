@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     llm_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
     llm_max_tokens: int = 16000
     agent_max_iterations: int = 8
-    # Jetons offerts à chaque ferme sur la clé d'Aiffel (au total) ; au-delà, elle apporte sa clé.
+    # Jetons offerts à chaque ferme et par mois sur la clé d'Aiffel ; au-delà, elle apporte sa clé.
     # Vide : pas de limite.
     platform_token_quota: int | None = 1_000_000
     lexicon_mcp_url: str = "https://lexicon.osfarm.org/mcp"
