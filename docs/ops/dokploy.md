@@ -102,45 +102,8 @@ redéploiements. Pour une sauvegarde, voir §5.
 
 ## 6. Site vitrine (aiffel.org)
 
-Le site commercial est une page statique (`site/`) servie par nginx sans privilèges : l'accueil
-(`index.html`) et les mentions légales (`mentions-legales.html`, servies sous `/mentions-legales`).
-C'est une application Dokploy **distincte** de la stack applicative : il se redéploie sans toucher
-à `app.aiffel.org`, et il n'a ni base, ni secret, ni variable d'environnement.
-
-**En service depuis le 2026-10-25.** Mise à jour : fusionner dans `main`, puis « Redeploy » dans Dokploy.
-
-Mise en place (déjà faite, à refaire seulement sur un autre serveur) :
-
-1. **DNS** chez Gandi (redirection web Gandi supprimée) :
-
-   | Type | Nom | Valeur |
-   |---|---|---|
-   | `A` | `@` | `76.13.49.203` (même serveur que `app`) |
-   | `CNAME` | `www` | `aiffel.org.` |
-   | `A` | `app` | `76.13.49.203` |
-
-   Les `MX` et le `TXT` SPF de la messagerie Gandi restent inchangés. Après un changement, un poste
-   peut garder l'ancienne IP en cache un moment : vérifier avec `dig +short @ns-80-a.gandi.net aiffel.org`.
-2. **Application** : dans le projet `aiffel`, application de type **Compose**, source GitHub
-   `ekylibre/aiffel`, branche `main`, chemin `docker/compose.site.yml`.
-3. **Domaines** (onglet « Domains ») : service `site`, port `8080`, HTTPS avec Let's Encrypt, pour
-   `aiffel.org` **et** `www.aiffel.org`. nginx redirige `www` vers `aiffel.org` (301).
-4. **Vérifier** :
-   ```bash
-   curl -fsS https://aiffel.org/healthz
-   curl -sI https://www.aiffel.org/ | grep -i location   # https://aiffel.org/
-   ```
-
-Tester en local avant de pousser :
-
-```bash
-docker build -t aiffel-site:local site
-docker run --rm --read-only --tmpfs /tmp -p 127.0.0.1:8089:8080 aiffel-site:local
-# http://127.0.0.1:8089
-```
-
-La page n'exécute aucun script et ne charge aucune ressource tierce (polices hébergées dans
-`site/fonts/`) ; la politique CSP de `site/nginx.conf` l'impose. Garder cette règle en modifiant le site.
+Le site commercial d'EKYLIBRE SAS n'est plus dans ce dépôt : il est déployé par une application
+Dokploy distincte (`aiffel` / `production` / `site`), depuis un dépôt privé.
 
 ## 7. Dépannage rapide
 
