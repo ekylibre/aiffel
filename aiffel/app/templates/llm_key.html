@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Clé d'IA — Aiffel{% endblock %}
+{% block content %}
+<h1>Votre clé d'IA</h1>
+<p>Avec votre propre clé, la consommation de l'assistant de la ferme <strong>{{ farm_name }}</strong> vous est facturée directement par le fournisseur. Aiffel la garde chiffrée et ne l'affiche plus jamais.</p>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/cle" autocomplete="off">
+  <input type="hidden" name="c" value="{{ code }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <fieldset>
+    <legend>Fournisseur</legend>
+    {% for value, label in providers %}
+    <label class="choice"><input type="radio" name="provider" value="{{ value }}" {% if value == provider %}checked{% endif %} required> {{ label }}</label>
+    {% endfor %}
+  </fieldset>
+  <label for="key">Clé d'API</label>
+  <input id="key" name="key" type="password" required autocomplete="off" autocapitalize="none" spellcheck="false">
+  <small>OpenRouter : openrouter.ai/keys. Anthropic : console.anthropic.com. La clé est vérifiée avant d'être enregistrée.</small>
+  <button type="submit">Enregistrer la clé</button>
+</form>
+{% endblock %}

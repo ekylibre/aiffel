@@ -1,5 +1,6 @@
 """Assemblage des services à partir de la configuration (une seule fois par processus)."""
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import timedelta
 
@@ -18,6 +19,7 @@ from aiffel.connectors.lexicon.client import LexiconClient
 from aiffel.db.models import ChannelIdentity
 from aiffel.db.session import global_session, make_engine, make_sessionmaker
 from aiffel.farm_context import FarmContextService
+from aiffel.farm_llm import FarmLLMService
 from aiffel.logging import configure_logging
 from aiffel.orchestrator.agent import Orchestrator
 from aiffel.orchestrator.llm import AnthropicProvider, Effort, LLMProvider
@@ -57,6 +59,7 @@ class Services:
     actions: ActionService
     orchestrator: Orchestrator | None
     voice: VoiceService | None = None
+    llm: FarmLLMService | None = None
     _dispatcher: Dispatcher | None = field(default=None, init=False)
 
     def handlers(self) -> Handlers:
@@ -68,6 +71,7 @@ class Services:
             assistant,
             self.actions,
             self.voice,
+            self.llm,
         )
 
     def dispatcher(self) -> Dispatcher:
@@ -81,20 +85,25 @@ class Services:
     def worker(self) -> Worker:
         return Worker(self.dispatcher(), self.telegram)
 
-    async def notify_paired(self, result: PairingResult) -> None:
-        """Confirme le raccordement sur Telegram (meilleur effort)."""
+    async def notify(self, identity_id: uuid.UUID, text: str) -> None:
+        """Message proactif sur Telegram (meilleur effort)."""
         async with global_session(self.sessions) as session:
-            identity = await session.get(ChannelIdentity, result.identity_id)
+            identity = await session.get(ChannelIdentity, identity_id)
             chat_id = self.identities.external_id(identity) if identity else None
         if chat_id:
-            await self.telegram.send(
-                chat_id,
-                OutboundMessage(
-                    text=f"Connecté à la ferme {result.farm_name} ✅\n\nEssayez /ferme ou /aide."
-                ),
-            )
+            await self.telegram.send(chat_id, OutboundMessage(text=text))
+
+    async def notify_paired(self, result: PairingResult) -> None:
+        """Confirme le raccordement sur Telegram (meilleur effort)."""
+        await self.notify(
+            result.identity_id,
+            f"Connecté à la ferme {result.farm_name} ✅\n\nEssayez /ferme ou /aide.",
+        )
 
     async def aclose(self) -> None:
+        if self.llm is not None:
+            await self.llm.aclose()
+            await self.llm.http.aclose()
         await self.telegram.aclose()
         await self.http.aclose()
         await self.engine.dispose()
@@ -141,19 +150,21 @@ def build_services(settings: Settings | None = None) -> Services:
     farms = FarmContextService(sessions, keyring, http)
     lexicon = LexiconClient(settings.lexicon_mcp_url)
     actions = ActionService(sessions)
-    orchestrator = None
-    if (provider := make_provider(settings)) is not None:
-        orchestrator = Orchestrator(
-            sessions,
-            farms,
-            provider,
-            ToolGateway([*phase1_tools(), *propose_tools()]),
-            AgentRuntime.load(),
-            lexicon=lexicon,
-            max_iterations=settings.agent_max_iterations,
-            model_label=settings.llm_model,
-            actions=actions,
-        )
+    # Client propre aux modèles d'IA : réponses longues (outils, raisonnement).
+    llm = FarmLLMService(sessions, keyring, settings, httpx.AsyncClient(timeout=120.0))
+    # L'agent tourne même sans clé d'Aiffel : une ferme peut apporter la sienne (/modele).
+    orchestrator = Orchestrator(
+        sessions,
+        farms,
+        make_provider(settings),
+        ToolGateway([*phase1_tools(), *propose_tools()]),
+        AgentRuntime.load(),
+        lexicon=lexicon,
+        max_iterations=settings.agent_max_iterations,
+        model_label=f"{settings.llm_provider}:{settings.llm_model}",
+        actions=actions,
+        llm=llm,
+    )
     telegram = TelegramClient(SecretValue(bot_token))
     voice = (
         VoiceService(
@@ -187,6 +198,7 @@ def build_services(settings: Settings | None = None) -> Services:
         actions=actions,
         orchestrator=orchestrator,
         voice=voice,
+        llm=llm,
     )
 
 
