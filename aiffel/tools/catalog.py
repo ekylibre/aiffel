@@ -262,6 +262,56 @@ async def _dose(_ctx: ToolContext, args: DoseInput) -> ToolOutput:
     )
 
 
+# --- Mémoire de la ferme (F-MEM) : proposée par l'agent, confirmée par l'utilisateur ---
+
+
+class AliasInput(BaseModel):
+    nom_usuel: str = Field(
+        ...,
+        min_length=2,
+        max_length=60,
+        description="Nom employé par l'utilisateur (« les Grands Champs »)",
+    )
+    parcelle: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Nom ou numéro exact de la parcelle dans Ekylibre (voir ekylibre_parcelles)",
+    )
+
+
+async def _propose_alias(ctx: ToolContext, args: AliasInput) -> ToolOutput:
+    if ctx.memory is None:
+        raise ToolFailure("La mémoire de la ferme n'est pas activée.")
+    wanted = _norm(args.parcelle.strip())
+    zone = next(
+        (
+            z
+            for z in await _ekylibre(ctx, "cultivable_zones")
+            if wanted in (_norm(str(z.get("name") or "")), _norm(str(z.get("work_number") or "")))
+        ),
+        None,
+    )
+    if zone is None:
+        raise ToolFailure(
+            "Parcelle introuvable dans Ekylibre : vérifiez-la avec ekylibre_parcelles."
+        )
+    target = str(zone.get("name") or zone.get("work_number"))
+    proposal = await ctx.memory.propose_alias(ctx.farm_id, args.nom_usuel, target)
+    if proposal is None:
+        return ToolOutput({"statut": "déjà retenu"}, "Aiffel (mémoire)")
+    ctx.memory_proposals.append(proposal)
+    return ToolOutput(
+        {
+            "statut": "proposition affichée à l'utilisateur avec des boutons ; rien n'est retenu "
+            "tant qu'il ne l'a pas confirmée",
+            "nom_usuel": proposal.alias,
+            "parcelle": proposal.target,
+        },
+        "Aiffel (mémoire)",
+    )
+
+
 # --- Savoir-faire (ECC) ---
 
 
@@ -333,6 +383,15 @@ def phase1_tools() -> list[ToolSpec]:
         ToolSpec("calc_somme", "Additionne des quantités de même dimension.", _sum, SumInput),
         ToolSpec(
             "calc_dose_par_hectare", "Dose par hectare = quantité / surface.", _dose, DoseInput
+        ),
+        ToolSpec(
+            "memoire_proposer_alias",
+            "Propose de retenir qu'un nom usuel de l'utilisateur désigne une parcelle d'Ekylibre. "
+            "Ne retient rien : l'utilisateur confirme avec un bouton.",
+            _propose_alias,
+            AliasInput,
+            access="propose",
+            requires="ekylibre",
         ),
         ToolSpec(
             "load_skill", "Charge les instructions d'un savoir-faire.", _load_skill, SkillInput
