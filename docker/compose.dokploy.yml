@@ -96,6 +96,9 @@ services:
     command: ["python", "-m", "aiffel.worker"]
     environment:
       <<: *app-env
+    # Le HEALTHCHECK de l'image interroge /healthz : le worker n'écoute aucun port.
+    healthcheck:
+      disable: true
     depends_on:
       db:
         condition: service_healthy
