@@ -4,8 +4,9 @@
   défaut d'Aiffel.
 - La clé d'une ferme est un secret du coffre (ADR-06), porté par une connexion ``llm:<fournisseur>``
   de la ferme. Elle n'est déchiffrée qu'ici, au moment de construire le fournisseur du tour.
-- Sans clé propre, la clé d'Aiffel (``AIFFEL_*_API_KEY``) sert, si elle existe ; sinon le modèle
-  n'est pas utilisable et la ferme retombe sur le modèle par défaut.
+- Sans clé propre, la clé d'Aiffel (``AIFFEL_*_API_KEY``) sert, si elle existe, dans la limite de
+  ``AIFFEL_PLATFORM_TOKEN_QUOTA`` jetons par ferme (au total) ; sinon le modèle n'est pas
+  utilisable et la ferme retombe sur le modèle par défaut.
 """
 
 from __future__ import annotations
@@ -19,11 +20,11 @@ from typing import cast
 import anthropic
 import httpx
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aiffel.db import audit
-from aiffel.db.models import Connection, Farm
+from aiffel.db.models import Connection, Farm, UsageMetric
 from aiffel.db.session import farm_session
 from aiffel.orchestrator.llm import AnthropicProvider, LLMProvider
 from aiffel.providers.catalog import PROVIDERS, ModelChoice, ProviderName, by_key
@@ -49,6 +50,10 @@ class LLMKeyError(Exception):
     """Message destiné à l'utilisateur, sans la clé."""
 
 
+class QuotaExhausted(Exception):
+    """La ferme a consommé les jetons offerts sur la clé d'Aiffel et n'a pas de clé propre."""
+
+
 @dataclass(frozen=True)
 class FarmLLM:
     """Réglage d'une ferme ; ``choice`` est ``None`` pour le modèle par défaut d'Aiffel."""
@@ -62,6 +67,8 @@ class ResolvedLLM:
     provider: LLMProvider
     label: str  # « fournisseur:modèle », clé de usage_metrics
     own_key: bool
+    # Jetons encore offerts sur la clé d'Aiffel (plafond du tour) ; None : pas de limite.
+    token_budget: int | None = None
 
 
 @dataclass
@@ -101,16 +108,45 @@ class FarmLLMService:
             if wanted is not None:
                 candidates.append((wanted.provider, wanted.model))
             candidates.append((self.settings.llm_provider, self.settings.llm_model))
+            remaining = self._remaining(await self._platform_tokens(session))
+            exhausted = False
             for provider, model in candidates:
                 own = await self._key(session, farm_id, provider)
                 key = own or self.platform_key(provider)
-                if key is not None:
-                    if wanted is not None and (provider, model) != (wanted.provider, wanted.model):
-                        log.warning("llm.choice_unusable", provider=wanted.provider)
-                    return ResolvedLLM(
-                        self._build(provider, model, key), f"{provider}:{model}", own is not None
-                    )
+                if key is None:
+                    continue
+                if own is None and remaining is not None and remaining <= 0:
+                    exhausted = True
+                    continue
+                if wanted is not None and (provider, model) != (wanted.provider, wanted.model):
+                    log.warning("llm.choice_unusable", provider=wanted.provider)
+                return ResolvedLLM(
+                    self._build(provider, model, key),
+                    f"{provider}:{model}",
+                    own is not None,
+                    None if own is not None else remaining,
+                )
+        if exhausted:
+            raise QuotaExhausted
         return None
+
+    async def allowance(self, farm_id: uuid.UUID) -> tuple[int, int] | None:
+        """Jetons consommés sur la clé d'Aiffel et quota ; ``None`` sans limite."""
+        if self.settings.platform_token_quota is None:
+            return None
+        async with farm_session(self.sessions, farm_id) as session:
+            return await self._platform_tokens(session), self.settings.platform_token_quota
+
+    def _remaining(self, used: int) -> int | None:
+        quota = self.settings.platform_token_quota
+        return None if quota is None else max(0, quota - used)
+
+    @staticmethod
+    async def _platform_tokens(session: AsyncSession) -> int:
+        total = await session.scalar(
+            select(func.coalesce(func.sum(UsageMetric.platform_tokens), 0))
+        )
+        return int(total or 0)
 
     # --- Écriture (exploitant) ---------------------------------------------------------------
 

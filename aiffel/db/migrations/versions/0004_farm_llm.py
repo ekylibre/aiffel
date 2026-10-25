@@ -1,4 +1,4 @@
-"""Modèle d'IA par ferme : objet des liens à usage unique, coût consommé par jour et par modèle
+"""Modèle d'IA par ferme : objet des liens à usage unique, coût et jetons sur la clé d'Aiffel
 
 Revision ID: 0004
 Revises: 0003
@@ -29,8 +29,14 @@ def upgrade() -> None:
         sa.Column("cost_usd", sa.Numeric(12, 6), server_default="0", nullable=False),
         schema="aiffel",
     )
+    op.add_column(
+        "usage_metrics",
+        sa.Column("platform_tokens", sa.BigInteger(), server_default="0", nullable=False),
+        schema="aiffel",
+    )
 
 
 def downgrade() -> None:
+    op.drop_column("usage_metrics", "platform_tokens", schema="aiffel")
     op.drop_column("usage_metrics", "cost_usd", schema="aiffel")
     op.drop_column("pairing_codes", "purpose", schema="aiffel")

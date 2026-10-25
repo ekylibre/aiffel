@@ -31,6 +31,11 @@ MAX_LISTED_ZONES = 30
 LLM_CALLBACK = "llm"
 OWNER_ONLY = "Seul l'exploitant de la ferme peut changer le modèle d'IA."
 
+
+def _tokens(count: int) -> str:
+    return f"{count:,}".replace(",", "\u202f")
+
+
 Assistant = Callable[[Caller, FarmRef, InboundMessage], Awaitable[list[OutboundMessage]]]
 
 
@@ -188,6 +193,13 @@ class Handlers:
             lines.append(
                 f"• {choice.label} ({PROVIDERS[choice.provider]}) : {choice.note}{missing}"
             )
+        if (allowance := await llm.allowance(farm.farm_id)) is not None:
+            used, quota = allowance
+            lines += [
+                "",
+                f"Crédit offert par Aiffel (sans clé propre) : {_tokens(min(used, quota))} jetons "
+                f"utilisés sur {_tokens(quota)}.",
+            ]
         if farm.role != "owner":
             return [OutboundMessage(text="\n".join([*lines, "", OWNER_ONLY]))]
         lines += [

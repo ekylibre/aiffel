@@ -93,12 +93,14 @@ docker build -f docker/Dockerfile -t aiffel .  # image
   `tests/eval/`). Sans choix, la ferme garde `AIFFEL_LLM_PROVIDER` / `AIFFEL_LLM_MODEL`.
 - `aiffel/farm_llm.py` : choix rangé dans `farms.settings["llm"]` ; clé propre de la ferme dans le
   coffre (connexion `llm:<fournisseur>`, secret `api_key`), vérifiée chez le fournisseur avant
-  d'être enregistrée. Sans clé de ferme, la clé d'Aiffel sert ; sinon retour au modèle par défaut.
+  d'être enregistrée. Sans clé de ferme, la clé d'Aiffel sert, dans la limite de
+  `AIFFEL_PLATFORM_TOKEN_QUOTA` jetons par ferme (1 M par défaut, au total, cache compris) ; au-delà,
+  l'agent demande à l'exploitant d'ajouter sa clé. Sans aucune clé : retour au modèle par défaut.
 - `/modele` sur Telegram (boutons pour l'exploitant seulement) ; la clé se saisit sur la page
   `/cle`, ouverte par un lien à usage unique (`pairing_codes.purpose = 'llm_key'`), **jamais dans la
   conversation**.
 - Consommation : `usage_metrics` par ferme, jour et `fournisseur:modèle`, avec `cost_usd` quand le
-  fournisseur le renvoie (OpenRouter).
+  fournisseur le renvoie (OpenRouter), et `platform_tokens` (part consommée sur la clé d'Aiffel).
 
 ## Conventions
 

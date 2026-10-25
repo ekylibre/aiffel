@@ -312,6 +312,8 @@ class UsageMetric(Base):
     stt_seconds: Mapped[int] = mapped_column(Integer, server_default="0")
     # Coût facturé par le fournisseur quand il le renvoie (OpenRouter) ; 0 sinon.
     cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), server_default="0")
+    # Part des jetons consommée sur la clé d'Aiffel (et non sur celle de la ferme) : sert au quota.
+    platform_tokens: Mapped[int] = mapped_column(BigInteger, server_default="0")
 
 
 INBOUND_JOB_STATUSES = ("pending", "processing", "done", "failed")

@@ -24,9 +24,9 @@ from aiffel.connectors.ekylibre.auth import EkylibreInstance
 from aiffel.db.models import AuditLog, Secret, UsageMetric
 from aiffel.db.session import farm_session, global_session
 from aiffel.farm_context import FarmContextService, FarmRef
-from aiffel.farm_llm import FarmLLMService, LLMKeyError
-from aiffel.orchestrator.agent import NO_MODEL, Orchestrator
-from aiffel.orchestrator.llm import AnthropicProvider, LLMResult, Usage
+from aiffel.farm_llm import FarmLLMService, LLMKeyError, QuotaExhausted
+from aiffel.orchestrator.agent import NO_MODEL, QUOTA_EXHAUSTED, Orchestrator
+from aiffel.orchestrator.llm import AnthropicProvider, LLMResult, ToolCall, Usage
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.pairing import PURPOSE_LLM_KEY, PairingError, PairingResult, PairingService
 from aiffel.providers.catalog import ProviderName
@@ -212,6 +212,60 @@ async def test_no_usable_model_is_explained_and_cost_is_recorded(env: Env) -> No
         metric = await session.scalar(select(UsageMetric))
     assert metric is not None and metric.model == "openrouter:deepseek/deepseek-v4.1-flash"
     assert float(metric.cost_usd) == pytest.approx(0.0042)
+    assert metric.platform_tokens == 0  # clé de la ferme : rien sur le crédit d'Aiffel
+
+
+class TurnProvider:
+    """Réponse finale, ou appel d'outil, de 700 jetons."""
+
+    def __init__(self, tool: bool = False) -> None:
+        self.tool = tool
+
+    async def complete(self, *_args: Any) -> LLMResult:
+        if self.tool:
+            call = ToolCall("t1", "outil_inconnu", {})
+            content = [{"type": "tool_use", "id": "t1", "name": call.name, "input": {}}]
+            return LLMResult(content, "", [call], "tool_use", "m", Usage(600, 100, 0, 0))
+        return LLMResult(
+            [{"type": "text", "text": "ok"}], "ok", [], "end_turn", "m", Usage(500, 100, 100, 0)
+        )
+
+
+async def test_platform_key_is_capped_per_farm(env: Env) -> None:
+    llm = env.llm(platform_token_quota=1000)
+    orchestrator = Orchestrator(
+        env.sessions, env.farms, None, ToolGateway(phase1_tools()), AgentRuntime.load(), llm=llm
+    )
+    provider = TurnProvider()
+    llm._build = lambda *_args: provider  # type: ignore[method-assign,assignment,return-value]
+
+    async def turn() -> str:
+        [reply, *_] = await orchestrator.run_turn(
+            _caller(env.owner), _farm(env.owner), _msg(kind=InboundKind.TEXT, text="?")
+        )
+        return reply.text
+
+    assert await turn() == "ok"  # 700 jetons sur 1 000
+    assert (await llm.resolve(env.owner.farm_id)).token_budget == 300  # type: ignore[union-attr]
+    provider.tool = True
+    assert await turn() == QUOTA_EXHAUSTED  # arrêt en cours de tour, une fois le crédit dépassé
+    assert await llm.allowance(env.owner.farm_id) == (1400, 1000)
+    with pytest.raises(QuotaExhausted):
+        await llm.resolve(env.owner.farm_id)
+    assert await turn() == QUOTA_EXHAUSTED
+
+    [menu] = await env.handlers(llm).paired(
+        _caller(env.owner), _msg(kind=InboundKind.COMMAND, command="modele")
+    )
+    assert "1\u202f000 jetons utilisés sur 1\u202f000" in menu.text
+
+    # Avec sa propre clé, la ferme n'est plus limitée.
+    await llm.save_key(env.owner.farm_id, env.owner.user_id, "anthropic", SecretValue(FARM_KEY))
+    resolved = await llm.resolve(env.owner.farm_id)
+    assert resolved is not None and resolved.own_key and resolved.token_budget is None
+    provider.tool = False
+    assert await turn() == "ok"
+    assert await llm.allowance(env.owner.farm_id) == (1400, 1000)
 
 
 async def test_model_menu_and_buttons_are_for_the_owner_only(env: Env) -> None:

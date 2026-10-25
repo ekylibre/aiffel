@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
 import structlog
 from sqlalchemy import select
@@ -24,10 +24,8 @@ from aiffel.channels.dispatcher import Caller
 from aiffel.db.models import Conversation, FarmMemory, Message, UsageMetric
 from aiffel.db.session import farm_session
 from aiffel.farm_context import FarmContextService, FarmRef
+from aiffel.farm_llm import QuotaExhausted, ResolvedLLM
 from aiffel.orchestrator.llm import LLMError, LLMProvider, SystemPrompt, Usage
-
-if TYPE_CHECKING:
-    from aiffel.farm_llm import ResolvedLLM
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.tools.catalog import RECONNECT_REASON
 from aiffel.tools.registry import LexiconLike, ToolAbort, ToolContext, ToolGateway
@@ -51,6 +49,10 @@ TOO_LONG = (
 VOICE_LATER = "Les messages vocaux arrivent bientôt. En attendant, écrivez-moi votre demande."
 TRANSCRIBED_NOTE = "[Message vocal transcrit automatiquement : des mots peuvent être mal reconnus]"
 PHOTO_LATER = "Je ne sais pas encore analyser les photos. Décrivez-moi ce que vous voyez."
+QUOTA_EXHAUSTED = (
+    "Votre ferme a utilisé tout le crédit d'IA offert par Aiffel. Pour continuer, l'exploitant "
+    "peut ajouter sa propre clé OpenRouter ou Anthropic avec /modele."
+)
 NO_MODEL = (
     "Aucun modèle d'IA n'est disponible pour votre ferme. L'exploitant peut en choisir un et "
     "ajouter sa clé avec /modele."
@@ -60,7 +62,18 @@ NO_MODEL = (
 class LLMResolver(Protocol):
     """Choisit le fournisseur de modèle d'une ferme (voir :mod:`aiffel.farm_llm`)."""
 
-    async def resolve(self, farm_id: uuid.UUID) -> "ResolvedLLM | None": ...
+    async def resolve(self, farm_id: uuid.UUID) -> ResolvedLLM | None:
+        """Lève :class:`QuotaExhausted` quand le crédit offert est épuisé, sans clé propre."""
+
+
+def _total(usage: Usage) -> int:
+    """Jetons d'un tour, cache compris : c'est ce que compte le quota de la clé d'Aiffel."""
+    return (
+        usage.input_tokens
+        + usage.output_tokens
+        + usage.cache_read_tokens
+        + usage.cache_write_tokens
+    )
 
 
 @dataclass
@@ -90,9 +103,19 @@ class Orchestrator:
             return [OutboundMessage(text="Écrivez-moi votre question. /aide")]
 
         provider, label = self.provider, self.model_label
+        platform, budget = True, None
         if self.llm is not None:
-            resolved = await self.llm.resolve(farm.farm_id)
-            provider, label = (resolved.provider, resolved.label) if resolved else (None, label)
+            try:
+                resolved = await self.llm.resolve(farm.farm_id)
+            except QuotaExhausted:
+                return [OutboundMessage(text=QUOTA_EXHAUSTED)]
+            provider = resolved.provider if resolved else None
+            if resolved is not None:
+                label, platform, budget = (
+                    resolved.label,
+                    not resolved.own_key,
+                    resolved.token_budget,
+                )
         if provider is None:
             return [OutboundMessage(text=NO_MODEL)]
 
@@ -124,7 +147,7 @@ class Orchestrator:
         messages: list[dict[str, Any]] = [*history, {"role": "user", "content": content}]
 
         try:
-            answer, usage = await self._loop(provider, ctx, messages, open_proposal)
+            answer, usage = await self._loop(provider, ctx, messages, open_proposal, budget)
         except ToolAbort as abort:
             if abort.reason == RECONNECT_REASON and access is not None:
                 await self.farms.mark_needs_reconnect(farm, access.connection_id, caller.user_id)
@@ -134,7 +157,7 @@ class Orchestrator:
             log.warning("agent.llm_error", error=str(exc))
             return [OutboundMessage(text=UNAVAILABLE)]
 
-        await self._record(farm.farm_id, conversation_id, text, answer, usage, label)
+        await self._record(farm.farm_id, conversation_id, text, answer, usage, label, platform)
         replies = [OutboundMessage(text=answer)]
         if ctx.proposals:
             # Récapitulatif produit par le code à partir de la charge utile réelle : c'est lui que
@@ -169,6 +192,7 @@ class Orchestrator:
         ctx: ToolContext,
         messages: list[dict[str, Any]],
         open_proposal: str | None = None,
+        token_budget: int | None = None,
     ) -> tuple[str, Usage]:
         volatile = self._volatile(ctx)
         if open_proposal:
@@ -190,6 +214,10 @@ class Orchestrator:
             if usage.input_tokens + usage.output_tokens > MAX_TURN_TOKENS:
                 log.warning("agent.token_budget")
                 return TOO_LONG, usage
+            if token_budget is not None and _total(usage) >= token_budget:
+                # Crédit offert épuisé en cours de tour : on s'arrête là.
+                log.info("agent.platform_quota")
+                return QUOTA_EXHAUSTED, usage
             messages.append({"role": "assistant", "content": result.assistant_content})
             outcomes = await asyncio.gather(
                 *(self.gateway.execute(ctx, call.name, call.input) for call in result.tool_calls)
@@ -277,6 +305,7 @@ class Orchestrator:
         answer: str,
         usage: Usage,
         model: str,
+        platform: bool = True,
     ) -> None:
         """Hook on_turn_end : historique du tour et consommation (NF-SOB)."""
         now = datetime.now(UTC)
@@ -311,6 +340,7 @@ class Orchestrator:
                 tokens_in=usage.input_tokens + usage.cache_read_tokens + usage.cache_write_tokens,
                 tokens_out=usage.output_tokens,
                 cost_usd=Decimal(str(round(usage.cost_usd, 6))),
+                platform_tokens=_total(usage) if platform else 0,
             )
             await session.execute(
                 stmt.on_conflict_do_update(
@@ -319,6 +349,8 @@ class Orchestrator:
                         "tokens_in": UsageMetric.tokens_in + stmt.excluded.tokens_in,
                         "tokens_out": UsageMetric.tokens_out + stmt.excluded.tokens_out,
                         "cost_usd": UsageMetric.cost_usd + stmt.excluded.cost_usd,
+                        "platform_tokens": UsageMetric.platform_tokens
+                        + stmt.excluded.platform_tokens,
                     },
                 )
             )
