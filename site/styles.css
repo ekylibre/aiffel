@@ -294,6 +294,21 @@ p { margin: 0; }
 .pied-dedans { display: flex; align-items: center; justify-content: space-between; gap: 16px 32px; flex-wrap: wrap; padding-block: 32px; font-size: 14px; }
 .pied .marque { color: var(--sol); }
 .pied p { color: color-mix(in srgb, var(--sol) 75%, transparent); }
+.pied a { color: inherit; }
+.pied .marque { text-decoration: none; }
+
+/* Mentions légales */
+.legal > h1 { font-size: clamp(48px, 8vw, 96px); font-weight: 900; text-transform: uppercase; padding-top: clamp(40px, 7vw, 80px); margin-bottom: 12px; }
+.legal > .etiquette { padding-bottom: 8px; }
+.legal .section:last-child { border-bottom: 0; }
+.fiche-legale { margin: 0; border-top: 2px solid var(--encre); }
+.fiche-legale div { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 4px 24px; padding-block: 12px; border-bottom: 1px solid var(--trait); }
+.fiche-legale dt { color: var(--lichen); }
+.fiche-legale dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.texte-legal { display: grid; gap: 16px; max-width: 70ch; }
+@media (max-width: 560px) {
+  .fiche-legale div { grid-template-columns: minmax(0, 1fr); }
+}
 
 @media (max-width: 1000px) {
   .offres { grid-template-columns: minmax(0, 1fr); max-width: 560px; }
