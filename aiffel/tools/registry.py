@@ -61,6 +61,9 @@ class ToolContext:
     # Service des propositions (A5) et propositions créées pendant le tour.
     actions: Any | None = None
     proposals: list[Any] = field(default_factory=list)
+    # Mémoire de la ferme (alias) et propositions de mémoire créées pendant le tour.
+    memory: Any | None = None
+    memory_proposals: list[Any] = field(default_factory=list)
 
     def has(self, requirement: Requirement | None) -> bool:
         if requirement == "ekylibre":
