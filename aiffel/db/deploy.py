@@ -29,13 +29,19 @@ def _escape_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def alembic_config() -> Config:
+    # Sans alembic.ini : il n'est pas copié dans l'image, seul le paquet aiffel l'est.
+    config = Config()
+    config.set_main_option("script_location", str(Path(__file__).resolve().parent / "migrations"))
+    return config
+
+
 def main() -> None:
     url = _env("AIFFEL_MIGRATION_DATABASE_URL")
     password = _env("AIFFEL_APP_PASSWORD")
 
-    # env.py lit AIFFEL_MIGRATION_DATABASE_URL via Settings ; alembic.ini sert au script_location.
-    repo_root = Path(__file__).resolve().parents[2]
-    command.upgrade(Config(str(repo_root / "alembic.ini")), "head")
+    # env.py lit AIFFEL_MIGRATION_DATABASE_URL via Settings.
+    command.upgrade(alembic_config(), "head")
 
     engine = create_engine(url, isolation_level="AUTOCOMMIT")
     try:
