@@ -47,6 +47,8 @@ packages = ["aiffel"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Chaque extension a son propre dépôt et sa propre configuration.
+extend-exclude = ["extensions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]

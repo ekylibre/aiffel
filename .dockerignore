@@ -1,5 +1,11 @@
 .venv
+**/.venv
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+extensions/*/tests
 .git
+**/.git
 .env
 .env.*
 **/__pycache__
