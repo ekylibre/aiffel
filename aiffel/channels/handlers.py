@@ -1,5 +1,6 @@
 """Réponses aux commandes de base (jalon M1) ; le reste des messages ira à l'orchestrateur (A4)."""
 
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
@@ -10,6 +11,8 @@ from aiffel.connectors.ekylibre.client import EkylibreError, EkylibreUnauthorize
 from aiffel.extensions import CommandHandler, Extension
 from aiffel.farm_context import FarmContextService, FarmRef
 from aiffel.farm_llm import FarmLLMService, LLMKeyError
+from aiffel.memory import CALLBACK_PREFIX as MEMORY_PREFIX
+from aiffel.memory import FarmMemoryError, MemoryService
 from aiffel.pairing import PURPOSE_LLM_KEY, PairingService
 from aiffel.providers.catalog import CHOICES, PROVIDERS, ProviderName
 from aiffel.voice import VoiceService
@@ -17,6 +20,7 @@ from aiffel.voice import VoiceService
 HELP_LINES = (
     "• /ferme : votre ferme et ses parcelles",
     "• /modele : le modèle d'IA de la ferme (et votre propre clé)",
+    "• /memoire : ce que je retiens de votre ferme (noms usuels des parcelles)",
     "• /start : relier ou reconnecter votre compte Ekylibre",
     "• /aide : ce message",
 )
@@ -35,6 +39,7 @@ RECONNECT = (
 )
 UNAVAILABLE = "Ekylibre ne répond pas pour le moment. Réessayez dans quelques minutes."
 MAX_LISTED_ZONES = 30
+MAX_LISTED_FACTS = 20
 LLM_CALLBACK = "llm"
 OWNER_ONLY = "Seul l'exploitant de la ferme peut changer le modèle d'IA."
 
@@ -60,6 +65,7 @@ class Handlers:
     voice: VoiceService | None = None
     llm: FarmLLMService | None = None
     extensions: list[Extension] = field(default_factory=list)
+    memory: MemoryService | None = None
 
     def _command(self, name: str | None) -> CommandHandler | None:
         return next((e.commands[name] for e in self.extensions if name in e.commands), None)
@@ -111,6 +117,8 @@ class Handlers:
                 return await self._farm_summary(caller, farm)
             if message.command in ("modele", "modèle", "model") and self.llm is not None:
                 return await self._llm_menu(self.llm, farm)
+            if message.command in ("memoire", "mémoire", "memory") and self.memory is not None:
+                return await self._memory_list(self.memory, farm)
             if (command := self._command(message.command)) is not None:
                 return await command(caller, farm, message)
         if message.kind is InboundKind.VOICE and self.voice is not None and message.file_id:
@@ -160,6 +168,9 @@ class Handlers:
     ) -> list[OutboundMessage]:
         if (message.callback_data or "").startswith(f"{LLM_CALLBACK}:") and self.llm is not None:
             return await self._llm_callback(self.llm, caller, farm, message.callback_data or "")
+        data = message.callback_data or ""
+        if data.startswith(f"{MEMORY_PREFIX}:") and self.memory is not None:
+            return await self._memory_callback(self.memory, caller, farm, data)
         if (callback := self._extension_callback(message.callback_data)) is not None:
             return await callback(caller, farm, message)
         parsed = parse_callback(message.callback_data)
@@ -192,6 +203,45 @@ class Handlers:
                 )
             ]
         return [OutboundMessage(text=outcome.text)]
+
+    async def _memory_list(self, memory: MemoryService, farm: FarmRef) -> list[OutboundMessage]:
+        facts = await memory.facts(farm.farm_id)
+        if not facts:
+            return [
+                OutboundMessage(
+                    text="Je ne retiens encore rien de votre ferme. Quand vous désignez une "
+                    "parcelle par un nom usuel, je vous propose de le retenir."
+                )
+            ]
+        lines = ["🧠 Ce que je retiens de votre ferme :"]
+        lines += [f"• « {fact.alias} » = {fact.target}" for fact in facts[:MAX_LISTED_FACTS]]
+        if farm.role != "owner":
+            return [OutboundMessage(text="\n".join(lines))]
+        buttons = [
+            [Button(label=f"Oublier « {fact.alias} »"[:64], data=f"{MEMORY_PREFIX}:rm:{fact.id}")]
+            for fact in facts[:MAX_LISTED_FACTS]
+        ]
+        return [OutboundMessage(text="\n".join(lines), buttons=buttons)]
+
+    async def _memory_callback(
+        self, memory: MemoryService, caller: Caller, farm: FarmRef, data: str
+    ) -> list[OutboundMessage]:
+        parts = data.split(":")
+        if caller.user_id is None or len(parts) != 3:
+            return [OutboundMessage(text="Ce bouton n'est plus valable.")]
+        try:
+            memory_id = uuid.UUID(parts[2])
+            if parts[1] == "y":
+                text = await memory.confirm(farm.farm_id, caller.user_id, memory_id)
+            elif parts[1] == "n":
+                text = await memory.reject(farm.farm_id, memory_id)
+            elif parts[1] == "rm":
+                text = await memory.forget(farm.farm_id, caller.user_id, memory_id)
+            else:
+                return [OutboundMessage(text="Ce bouton n'est plus valable.")]
+        except (ValueError, FarmMemoryError) as exc:
+            text = str(exc) if isinstance(exc, FarmMemoryError) else "Ce bouton n'est plus valable."
+        return [OutboundMessage(text=text)]
 
     async def _llm_menu(self, llm: FarmLLMService, farm: FarmRef) -> list[OutboundMessage]:
         """Modèle actuel et choix possibles ; boutons réservés à l'exploitant."""

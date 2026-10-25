@@ -84,6 +84,15 @@ le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le
   callback du bouton Valider (`aiffel/channels/handlers.py`) appelle `create_intervention`, ce que
   vérifie `tests/integration/test_validated_writes.py::test_no_code_path_from_the_agent_to_an_ekylibre_write`.
 
+## Mémoire de la ferme (F-MEM)
+
+- `aiffel/memory.py` : alias de parcelles (« les Grands Champs » = parcelle Ekylibre). L'agent les
+  propose avec l'outil `memoire_proposer_alias` (parcelle vérifiée dans Ekylibre) ; rien n'est
+  retenu avant le bouton « Retenir » (`mem:y:<id>`, traité hors modèle). Seuls les faits confirmés
+  entrent dans la partie volatile du prompt.
+- `/memoire` liste ce qui est retenu ; l'exploitant seul peut l'effacer (`mem:rm:<id>`). Un même
+  nom usuel ne désigne qu'une parcelle : le confirmer pour une autre remplace l'ancien.
+
 ## Vocal (A6)
 
 - `aiffel/voice.py` : `VoiceService` (durée maximale vérifiée **avant** le téléchargement, durée

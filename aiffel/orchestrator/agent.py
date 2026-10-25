@@ -24,6 +24,8 @@ from aiffel.db.session import farm_session
 from aiffel.extensions import UsageEvent, UsageHook
 from aiffel.farm_context import FarmContextService, FarmRef
 from aiffel.farm_llm import NoPlatformCredit, ResolvedLLM
+from aiffel.memory import CALLBACK_PREFIX as MEMORY_PREFIX
+from aiffel.memory import MemoryService
 from aiffel.orchestrator.llm import LLMError, LLMProvider, SystemPrompt, Usage
 from aiffel.orchestrator.runtime import AgentRuntime
 from aiffel.tools.catalog import RECONNECT_REASON
@@ -89,6 +91,7 @@ class Orchestrator:
     llm: LLMResolver | None = None
     # Consommation de chaque tour, transmise aux extensions (mesure, quota…).
     on_usage: UsageHook | None = None
+    memory: MemoryService | None = None
 
     async def run_turn(
         self, caller: Caller, farm: FarmRef, message: InboundMessage
@@ -135,6 +138,7 @@ class Orchestrator:
             aliases=await self._aliases(farm.farm_id),
             skills={name: doc.body for name, doc in self.runtime.skills.items()},
             actions=self.actions,
+            memory=self.memory,
         )
         open_proposal = (
             await self.actions.open_proposal(farm.farm_id, caller.user_id, "intervention")
@@ -181,6 +185,19 @@ class Orchestrator:
                                 label="✖️ Annuler",
                                 data=callback_data("x", proposal.id, proposal.digest),
                             ),
+                        ]
+                    ],
+                )
+            )
+        for fact in ctx.memory_proposals:
+            # Rien n'est retenu sans ce bouton, traité hors modèle (F-MEM).
+            replies.append(
+                OutboundMessage(
+                    text=f"🧠 Je retiens pour la ferme : « {fact.alias} » = {fact.target} ?",
+                    buttons=[
+                        [
+                            Button(label="✅ Retenir", data=f"{MEMORY_PREFIX}:y:{fact.id}"),
+                            Button(label="✖️ Non", data=f"{MEMORY_PREFIX}:n:{fact.id}"),
                         ]
                     ],
                 )
