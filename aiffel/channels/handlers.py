@@ -1,5 +1,6 @@
 """Réponses aux commandes de base (jalon M1) ; le reste des messages ira à l'orchestrateur (A4)."""
 
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
@@ -12,11 +13,14 @@ from aiffel.farm_context import FarmContextService, FarmRef
 from aiffel.farm_llm import FarmLLMService, LLMKeyError
 from aiffel.pairing import PURPOSE_LLM_KEY, PairingService
 from aiffel.providers.catalog import CHOICES, PROVIDERS, ProviderName
+from aiffel.rights import CALLBACK_PREFIX as RIGHTS_PREFIX
+from aiffel.rights import RightsError, RightsService
 from aiffel.voice import VoiceService
 
 HELP_LINES = (
     "• /ferme : votre ferme et ses parcelles",
     "• /modele : le modèle d'IA de la ferme (et votre propre clé)",
+    "• /droits : qui peut valider les enregistrements dans Ekylibre",
     "• /start : relier ou reconnecter votre compte Ekylibre",
     "• /aide : ce message",
 )
@@ -60,6 +64,7 @@ class Handlers:
     voice: VoiceService | None = None
     llm: FarmLLMService | None = None
     extensions: list[Extension] = field(default_factory=list)
+    rights: RightsService | None = None
 
     def _command(self, name: str | None) -> CommandHandler | None:
         return next((e.commands[name] for e in self.extensions if name in e.commands), None)
@@ -111,6 +116,8 @@ class Handlers:
                 return await self._farm_summary(caller, farm)
             if message.command in ("modele", "modèle", "model") and self.llm is not None:
                 return await self._llm_menu(self.llm, farm)
+            if message.command == "droits" and self.rights is not None:
+                return await self._rights_menu(self.rights, caller, farm)
             if (command := self._command(message.command)) is not None:
                 return await command(caller, farm, message)
         if message.kind is InboundKind.VOICE and self.voice is not None and message.file_id:
@@ -160,6 +167,10 @@ class Handlers:
     ) -> list[OutboundMessage]:
         if (message.callback_data or "").startswith(f"{LLM_CALLBACK}:") and self.llm is not None:
             return await self._llm_callback(self.llm, caller, farm, message.callback_data or "")
+        if (message.callback_data or "").startswith(f"{RIGHTS_PREFIX}:") and self.rights:
+            return await self._rights_callback(
+                self.rights, caller, farm, message.callback_data or ""
+            )
         if (callback := self._extension_callback(message.callback_data)) is not None:
             return await callback(caller, farm, message)
         parsed = parse_callback(message.callback_data)
@@ -192,6 +203,56 @@ class Handlers:
                 )
             ]
         return [OutboundMessage(text=outcome.text)]
+
+    async def _rights_menu(
+        self, rights: RightsService, caller: Caller, farm: FarmRef
+    ) -> list[OutboundMessage]:
+        members = await rights.members(farm.farm_id)
+        if farm.role != "owner":
+            me = next((m for m in members if m.user_id == caller.user_id), None)
+            allowed = me is not None and me.can_validate
+            return [
+                OutboundMessage(
+                    text=(
+                        "Vous pouvez valider les enregistrements dans Ekylibre."
+                        if allowed
+                        else "Vous proposez les enregistrements ; l'exploitant les valide."
+                    )
+                    + " L'exploitant règle ces droits avec /droits."
+                )
+            ]
+        lines = ["👥 Qui peut valider les enregistrements dans Ekylibre :"]
+        buttons: list[list[Button]] = []
+        for member in members:
+            if member.role == "owner":
+                lines.append(f"• {member.name} (exploitant) : valide toujours")
+                continue
+            state = "peut valider" if member.can_validate else "propose seulement"
+            lines.append(f"• {member.name} (salarié) : {state}")
+            label = (
+                f"Retirer à {member.name} le droit de valider"
+                if member.can_validate
+                else f"Autoriser {member.name} à valider"
+            )
+            data = f"{RIGHTS_PREFIX}:t:{member.membership_id}"
+            buttons.append([Button(label=label[:64], data=data)])
+        if not buttons:
+            lines.append("\nAucun salarié n'est encore relié à la ferme.")
+        return [OutboundMessage(text="\n".join(lines), buttons=buttons)]
+
+    async def _rights_callback(
+        self, rights: RightsService, caller: Caller, farm: FarmRef, data: str
+    ) -> list[OutboundMessage]:
+        parts = data.split(":")
+        if caller.user_id is None or len(parts) != 3 or parts[1] != "t":
+            return [OutboundMessage(text="Ce bouton n'est plus valable.")]
+        try:
+            text = await rights.toggle(farm.farm_id, caller.user_id, uuid.UUID(parts[2]))
+        except ValueError:
+            text = "Ce bouton n'est plus valable."
+        except RightsError as exc:
+            text = str(exc)
+        return [OutboundMessage(text=text)]
 
     async def _llm_menu(self, llm: FarmLLMService, farm: FarmRef) -> list[OutboundMessage]:
         """Modèle actuel et choix possibles ; boutons réservés à l'exploitant."""
