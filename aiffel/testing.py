@@ -56,8 +56,8 @@ def database() -> Iterator[Database]:
         config = alembic_config()
         config.attributes["url"] = owner_url
         command.upgrade(config, "head")
-        for upgrade in extension_migrations():
-            upgrade(owner_url)
+        for migrations in extension_migrations():
+            migrations.upgrade(owner_url)
 
         sync_engine = create_engine(owner_url)
         with sync_engine.begin() as conn:

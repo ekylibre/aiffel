@@ -39,8 +39,9 @@ if TYPE_CHECKING:
 log = structlog.get_logger()
 
 ENTRY_POINT_GROUP = "aiffel.extensions"
-# Migrations d'une extension : ``upgrade(url_proprietaire: str) -> None``, lancée après celles du
-# cœur par ``aiffel.db.deploy`` (et par la base de test de ``aiffel.testing``).
+# Migrations d'une extension : un module qui fournit ``upgrade(url_proprietaire)`` et ``TABLES``
+# (ses tables, table de version comprise). ``upgrade`` est lancée après les migrations du cœur par
+# ``aiffel.db.deploy`` et par ``aiffel.testing`` ; le cœur ignore ``TABLES`` dans ses comparaisons.
 MIGRATIONS_GROUP = "aiffel.migrations"
 
 CommandHandler = Callable[["Caller", "FarmRef", InboundMessage], Awaitable[list[OutboundMessage]]]
@@ -188,5 +189,15 @@ def llm_menu_lines(extensions: list[Extension]) -> MenuLines | None:
     return run
 
 
-def extension_migrations() -> list[Callable[[str], None]]:
+class ExtensionMigrations(Protocol):
+    TABLES: tuple[str, ...]
+
+    def upgrade(self, url: str) -> None: ...
+
+
+def extension_migrations() -> list[ExtensionMigrations]:
     return [entry.load() for entry in entry_points(group=MIGRATIONS_GROUP)]
+
+
+def extension_tables() -> frozenset[str]:
+    return frozenset(table for module in extension_migrations() for table in module.TABLES)

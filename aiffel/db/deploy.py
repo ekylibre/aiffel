@@ -44,8 +44,8 @@ def main() -> None:
 
     # env.py lit AIFFEL_MIGRATION_DATABASE_URL via Settings.
     command.upgrade(alembic_config(), "head")
-    for upgrade in extension_migrations():
-        upgrade(url)
+    for migrations in extension_migrations():
+        migrations.upgrade(url)
 
     engine = create_engine(url, isolation_level="AUTOCOMMIT")
     try:
