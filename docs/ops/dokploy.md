@@ -46,6 +46,7 @@ Toutes se saisissent dans l'onglet « Environment » de Dokploy, pas dans `.env`
 | `AIFFEL_TELEGRAM_WEBHOOK_SECRET` | Chaîne aléatoire ≥ 32 octets (header Telegram). |
 | `AIFFEL_ANTHROPIC_API_KEY` | Clé Aiffel (facultative si une ferme apporte la sienne). |
 | `AIFFEL_OPENROUTER_API_KEY` | Clé OpenRouter d'Aiffel (facultative). |
+| `AIFFEL_PLANTNET_API_KEY` | Clé Pl@ntNet (facultative) : identification des maladies et des plantes sur photo. |
 
 Variables facultatives (valeur par défaut dans `compose.dokploy.yml`) :
 `AIFFEL_LOG_LEVEL`, `AIFFEL_LLM_PROVIDER`, `AIFFEL_LLM_MODEL`, `AIFFEL_LLM_EFFORT`,
