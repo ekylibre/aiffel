@@ -6,6 +6,7 @@ Aiffel est un orchestrateur conversationnel qui fédère les logiciels d'une exp
 - Exigences : `docs/requirements.md`
 - Architecture phase 1 (ADR) : `docs/architecture/phase1.md`
 - Plan d'implémentation : `claudedocs/workflow_phase1_prototype.md`
+- Déploiement Dokploy : `docs/ops/dokploy.md`
 
 ## Commandes
 
@@ -21,7 +22,12 @@ uv run uvicorn aiffel.app.main:app --reload    # application en local (rôle aif
 uv run python -m aiffel.worker                  # worker de la file des messages entrants
 uv run python -m aiffel.channels.telegram.poll  # dev : Telegram en polling (bot de test, sans webhook)
 docker build -f docker/Dockerfile -t aiffel .  # image
+docker compose -f docker/compose.dokploy.yml config   # vérifie la stack de production (Dokploy)
 ```
+
+Déploiement : `docker/compose.dokploy.yml` est la stack Dokploy (db, migrate, app, worker). Le
+service `migrate` lance `python -m aiffel.db.deploy` (alembic + mot de passe `aiffel_app`). Après
+le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le webhook.
 
 ## Organisation
 
