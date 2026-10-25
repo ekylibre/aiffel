@@ -8,6 +8,9 @@ extensions/*/tests
 **/.git
 .env
 .env.*
+# Secrets locaux des extensions (.env, .env.dokploy…) : jamais dans l'image.
+**/.env
+**/.env.*
 **/__pycache__
 .pytest_cache
 .mypy_cache
