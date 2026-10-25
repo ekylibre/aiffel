@@ -106,11 +106,16 @@ class OpenRouterProvider:
         max_tokens: int = 16000,
         http: httpx.AsyncClient | None = None,
         timeout: float = 120.0,
+        allow_data_collection: bool = False,
+        retry_delays: tuple[float, ...] | None = None,
     ) -> None:
         self._key = api_key
         self.model = model
         self.effort = effort
         self.max_tokens = max_tokens
+        # Évaluation sur données fictives seulement (modèles gratuits) : jamais en production.
+        self.allow_data_collection = allow_data_collection
+        self.retry_delays = RETRY_DELAYS if retry_delays is None else retry_delays
         self._http = http or httpx.AsyncClient(timeout=timeout)
 
     async def aclose(self) -> None:
@@ -124,7 +129,10 @@ class OpenRouterProvider:
             "messages": to_openai_messages(system, messages),
             "max_tokens": self.max_tokens,
             "usage": {"include": True},
-            "provider": {"data_collection": "deny", "require_parameters": True},
+            "provider": {
+                "data_collection": "allow" if self.allow_data_collection else "deny",
+                "require_parameters": True,
+            },
         }
         if tools:
             body["tools"] = to_openai_tools(tools)
@@ -146,7 +154,7 @@ class OpenRouterProvider:
 
     async def _post(self, body: dict[str, Any]) -> httpx.Response:
         """POST avec nouvelles tentatives espacées sur 429 (limite de débit en amont, passagère)."""
-        for delay in (*RETRY_DELAYS, None):
+        for delay in (*self.retry_delays, None):
             try:
                 response = await self._http.post(
                     API_URL,
