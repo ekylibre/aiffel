@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import signal
+from collections.abc import Sequence
 
 import structlog
 
@@ -12,15 +13,23 @@ from aiffel.channels.telegram.api import TelegramClient, TelegramError
 from aiffel.channels.telegram.parse import CHANNEL as TELEGRAM
 from aiffel.channels.telegram.parse import parse_update
 from aiffel.db.session import global_session
+from aiffel.extensions import Periodic
 
 log = structlog.get_logger()
 
 
 class Worker:
-    def __init__(self, dispatcher: Dispatcher, telegram: TelegramClient) -> None:
+    def __init__(
+        self,
+        dispatcher: Dispatcher,
+        telegram: TelegramClient,
+        periodic: Sequence[Periodic] = (),
+    ) -> None:
         self.dispatcher = dispatcher
         self.telegram = telegram
         self.sessions = dispatcher.sessions
+        # Tâches régulières des extensions (échéances, file d'envoi…), à côté de la file.
+        self.periodic = tuple(periodic)
 
     async def run_once(self) -> bool:
         """Traite au plus un travail ; ``False`` si la file est vide."""
@@ -59,17 +68,33 @@ class Worker:
             await self.telegram.send(message.external_chat_id, reply)
         log.info("message.answered", job_id=job.id)
 
-    async def run_forever(self, idle_sleep: float = 0.5) -> None:
-        stop = asyncio.Event()
-        loop = asyncio.get_running_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            with contextlib.suppress(NotImplementedError):
-                loop.add_signal_handler(sig, stop.set)
-        log.info("worker.started")
+    async def _run_periodic(self, task: Periodic, stop: asyncio.Event) -> None:
         while not stop.is_set():
-            if not await self.run_once():
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(stop.wait(), idle_sleep)
+            try:
+                await task.run()
+            except Exception as exc:
+                # Une erreur ne doit ni arrêter le worker, ni empêcher le passage suivant.
+                log.exception("periodic.error", task=task.name, error_type=type(exc).__name__)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(stop.wait(), task.every.total_seconds())
+
+    async def run_forever(self, idle_sleep: float = 0.5, stop: asyncio.Event | None = None) -> None:
+        if stop is None:
+            stop = asyncio.Event()
+            loop = asyncio.get_running_loop()
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                with contextlib.suppress(NotImplementedError):
+                    loop.add_signal_handler(sig, stop.set)
+        tasks = [asyncio.create_task(self._run_periodic(t, stop)) for t in self.periodic]
+        log.info("worker.started", periodic=[t.name for t in self.periodic])
+        try:
+            while not stop.is_set():
+                if not await self.run_once():
+                    with contextlib.suppress(TimeoutError):
+                        await asyncio.wait_for(stop.wait(), idle_sleep)
+        finally:
+            stop.set()
+            await asyncio.gather(*tasks, return_exceptions=True)
         log.info("worker.stopped")
 
 
