@@ -10,6 +10,7 @@ parallèle du développement. Version 0.1 du 2026-10-24.
 | `identite.html` | Monde agricole élargi : conseillers, coopératives, chambres, OSFarm/GAIA | https://claude.ai/artifact/LaMQYdKaJWQTajen9qAwBk |
 | `fiche-a4.html`, `fiche-a4.pdf` | Agriculteurs, fiche recto à imprimer et distribuer | https://claude.ai/artifact/2aBFeCpE2F1yYP2KXBPqBq |
 | `schema.html`, `schema.pdf` | Schéma fonctionnel en tour Eiffel : agriculteur au sommet, outils dans la base | https://claude.ai/artifact/P8wiJxf5Cpsn5h5pagSy3m |
+| `site/` (racine du dépôt) | Grand public : site vitrine aiffel.org (concept, offres, garanties), déployé par `docker/compose.site.yml` | https://aiffel.org (après déploiement, voir `docs/ops/dokploy.md` §6) |
 | `signe.svg`, `signe-petit.svg` | Logo : version complète, et version simplifiée sous 24 px | |
 | Document commercial (doc partagé, pas de fichier) | Prospects et partenaires : offres Libre (Telegram), En ligne (app.aiffel.org) et Pro (WhatsApp) | https://claude.ai/artifact/T2TFefaA6knbLPPLAjAJKr |
 | `veille-concurrentielle.md` | Interne : comparatif Tellia, Hector, Hectar AI, xSupra, Terragrow (2026-10-25) | |
