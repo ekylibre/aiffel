@@ -101,3 +101,33 @@ async def test_documents_are_sent_after_the_text() -> None:
     )
     assert [name for name, _ in calls] == ["sendMessage", "sendDocument"]
     assert b'filename="AIF-2026-000001.pdf"' in calls[1][1] and b"%PDF-1.7" in calls[1][1]
+
+
+async def test_the_worker_runs_extension_tasks_and_survives_their_errors() -> None:
+    import asyncio
+    from datetime import timedelta
+    from unittest.mock import AsyncMock, MagicMock
+
+    from aiffel.extensions import Periodic
+    from aiffel.worker import Worker
+
+    stop = asyncio.Event()
+    runs: list[str] = []
+
+    async def failing() -> None:
+        runs.append("échec")
+        raise RuntimeError("panne")
+
+    async def counting() -> None:
+        runs.append("ok")
+        if runs.count("ok") == 2:
+            stop.set()
+
+    worker = Worker(MagicMock(), MagicMock())
+    worker.run_once = AsyncMock(return_value=False)  # type: ignore[method-assign]
+    worker.periodic = (
+        Periodic("en-panne", timedelta(milliseconds=10), failing),
+        Periodic("compteur", timedelta(milliseconds=10), counting),
+    )
+    await asyncio.wait_for(worker.run_forever(idle_sleep=0.01, stop=stop), timeout=5)
+    assert runs.count("ok") == 2 and runs.count("échec") >= 1

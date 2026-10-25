@@ -94,7 +94,8 @@ class Services:
         return self._dispatcher
 
     def worker(self) -> Worker:
-        return Worker(self.dispatcher(), self.telegram)
+        periodic = [task for extension in self.extensions for task in extension.periodic]
+        return Worker(self.dispatcher(), self.telegram, periodic)
 
     async def notify(self, identity_id: uuid.UUID, text: str) -> None:
         """Message proactif sur Telegram (meilleur effort)."""
