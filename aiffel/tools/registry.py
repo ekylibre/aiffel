@@ -31,14 +31,6 @@ Role = Literal["owner", "worker"]
 Requirement = Literal["ekylibre", "lexicon", "plantnet"]
 
 
-class ToolAbort(Exception):
-    """Interrompt tout le tour (par exemple un jeton Ekylibre refusé)."""
-
-    def __init__(self, reason: str) -> None:
-        super().__init__(reason)
-        self.reason = reason
-
-
 class ToolFailure(Exception):
     """Échec d'un outil, renvoyé au modèle comme résultat d'erreur (le tour continue)."""
 
@@ -63,6 +55,8 @@ class ToolContext:
     user_id: uuid.UUID
     today: date
     ekylibre: Any | None = None  # EkylibreClient ; typé Any pour éviter un import circulaire
+    # Jeton Ekylibre refusé (confirmé) pendant le tour : connexion à refaire après la réponse.
+    ekylibre_refused: bool = False
     lexicon: LexiconLike | None = None
     aliases: dict[str, str] = field(default_factory=dict)
     skills: dict[str, str] = field(default_factory=dict)
@@ -177,8 +171,6 @@ class ToolGateway:
         started = time.monotonic()
         try:
             output = await asyncio.wait_for(spec.handler(ctx, args), TOOL_TIMEOUT_S)
-        except ToolAbort:
-            raise
         except ToolFailure as exc:
             log.info("tool.failed", tool=name, ms=int((time.monotonic() - started) * 1000))
             return ToolResult(str(exc), is_error=True)

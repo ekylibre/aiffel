@@ -69,6 +69,8 @@ class FakeEkylibre:
         ]
     )
     revoked: set[str] = field(default_factory=set)
+    # Chemins refusés (401) malgré un jeton valide : droits du compte insuffisants.
+    forbidden: set[str] = field(default_factory=set)
     requests: list[httpx.Request] = field(default_factory=list)
     products: dict[str, list[dict[str, Any]]] = field(
         default_factory=lambda: {
@@ -115,7 +117,7 @@ class FakeEkylibre:
             return httpx.Response(401, json={"message": "Invalid email or password."})
 
         account = self._account(request)
-        if account is None:
+        if account is None or path in self.forbidden:
             return httpx.Response(401, json={"message": "Unauthorized."})
         if path == "/api/v2/users/me":
             return httpx.Response(

@@ -23,14 +23,13 @@ from aiffel.channels.dispatcher import Caller
 from aiffel.db.models import Conversation, FarmMemory, Message
 from aiffel.db.session import farm_session
 from aiffel.extensions import UsageEvent, UsageHook
-from aiffel.farm_context import FarmContextService, FarmRef
+from aiffel.farm_context import EkylibreAccess, FarmContextService, FarmRef
 from aiffel.farm_llm import NoPlatformCredit, ResolvedLLM
 from aiffel.memory import CALLBACK_PREFIX as MEMORY_PREFIX
 from aiffel.memory import MemoryService
 from aiffel.orchestrator.llm import LLMError, LLMProvider, SystemPrompt, Usage
 from aiffel.orchestrator.runtime import AgentRuntime
-from aiffel.tools.catalog import RECONNECT_REASON
-from aiffel.tools.registry import LexiconLike, PlantNetLike, ToolAbort, ToolContext, ToolGateway
+from aiffel.tools.registry import LexiconLike, PlantNetLike, ToolContext, ToolGateway
 from aiffel.voice import AudioTooLargeError
 
 log = structlog.get_logger()
@@ -187,14 +186,13 @@ class Orchestrator:
 
         try:
             answer, usage = await self._loop(provider, ctx, messages, open_proposal, budget)
-        except ToolAbort as abort:
-            if abort.reason == RECONNECT_REASON and access is not None:
-                await self.farms.mark_needs_reconnect(farm, access.connection_id, caller.user_id)
-                return [OutboundMessage(text=RECONNECT)]
-            raise
         except LLMError as exc:
             log.warning("agent.llm_error", error=str(exc))
-            return [OutboundMessage(text=UNAVAILABLE)]
+            return [
+                OutboundMessage(text=UNAVAILABLE),
+                *await self._after_refusal(ctx, farm, access, caller.user_id),
+            ]
+        reconnect = await self._after_refusal(ctx, farm, access, caller.user_id)
 
         # L'historique ne garde que du texte : on y note qu'une photo accompagnait la question.
         recorded = f"[Photo] {text}" if photos else text
@@ -238,7 +236,16 @@ class Orchestrator:
                     ],
                 )
             )
-        return replies
+        return [*replies, *reconnect]
+
+    async def _after_refusal(
+        self, ctx: ToolContext, farm: FarmRef, access: EkylibreAccess | None, user_id: uuid.UUID
+    ) -> list[OutboundMessage]:
+        """Jeton Ekylibre refusé pendant le tour : connexion à refaire, et l'utilisateur le sait."""
+        if not ctx.ekylibre_refused or access is None:
+            return []
+        await self.farms.mark_needs_reconnect(farm, access.connection_id, user_id)
+        return [OutboundMessage(text=RECONNECT)]
 
     async def _loop(
         self,

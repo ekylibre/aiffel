@@ -262,12 +262,16 @@ async def test_revoked_token_asks_to_reconnect(
 ) -> None:
     result, fake, farms = paired
     fake.revoked.add("TOK-CHEF")
-    provider = ScriptedProvider(tool_turn(("ekylibre_parcelles", {})))
+    provider = ScriptedProvider(
+        tool_turn(("ekylibre_parcelles", {})), final("Ekylibre refuse l'accès.")
+    )
     caller, farm = _farm(result)
-    [reply] = await _orchestrator(app_sessions, farms, provider).run_turn(
+    [answer, reply] = await _orchestrator(app_sessions, farms, provider).run_turn(
         caller, farm, _msg("Mes parcelles ?")
     )
-    assert reply.text == RECONNECT
+    assert answer.text == "Ekylibre refuse l'accès." and reply.text == RECONNECT
+    tool_result = provider.calls[1]["messages"][-1]["content"][0]
+    assert tool_result["is_error"] and "refusé" in tool_result["content"]
     async with farm_session(app_sessions, result.farm_id) as session:
         assert (await session.scalars(select(Connection))).one().status == "needs_reconnect"
     # Tour suivant : pas d'appel au modèle tant que la connexion n'est pas refaite.
@@ -390,6 +394,52 @@ async def test_photo_is_analysed_by_plantnet_and_never_sent_to_the_model(
     async with farm_session(app_sessions, result.farm_id) as session:
         stored = list(await session.scalars(select(Message.content).where(Message.role == "user")))
     assert stored[-1] == "[Photo] Qu'a ma pomme de terre ?"
+
+
+async def test_revoked_token_keeps_the_photo_diagnosis(
+    app_sessions: Sessions, paired: tuple[PairingResult, FakeEkylibre, FarmContextService]
+) -> None:
+    """Un refus Ekylibre pendant le tour ne fait plus perdre le résultat de Pl@ntNet."""
+    result, fake, farms = paired
+    fake.revoked.add("TOK-CHEF")
+
+    async def fetch(_file_id: str, _max: int) -> bytes:
+        return b"img"
+
+    provider = ScriptedProvider(
+        tool_turn(
+            ("plantnet_identifier_maladie", {}), ("ekylibre_productions", {"campaign": 2026})
+        ),
+        final("Probablement du mildiou. Source : Pl@ntNet"),
+    )
+    caller, farm = _farm(result)
+    replies = await _orchestrator(
+        app_sessions, farms, provider, plantnet=FakePlantNet(), fetch_photo=fetch
+    ).run_turn(caller, farm, _photo("Qu'est-ce que c'est ?"))
+
+    assert [r.text for r in replies] == ["Probablement du mildiou. Source : Pl@ntNet", RECONNECT]
+    plantnet_result, ekylibre_result = provider.calls[1]["messages"][-1]["content"]
+    assert not plantnet_result["is_error"] and ekylibre_result["is_error"]
+    async with farm_session(app_sessions, result.farm_id) as session:
+        assert (await session.scalars(select(Connection))).one().status == "needs_reconnect"
+
+
+async def test_unconfirmed_refusal_is_a_tool_error_only(
+    app_sessions: Sessions, paired: tuple[PairingResult, FakeEkylibre, FarmContextService]
+) -> None:
+    """Un 401 sur une donnée, alors que ``users/me`` passe : droits, pas jeton révoqué."""
+    result, fake, farms = paired
+    fake.forbidden.add("/api/v2/cultivable_zones")
+    provider = ScriptedProvider(tool_turn(("ekylibre_parcelles", {})), final("Accès refusé."))
+    caller, farm = _farm(result)
+    [reply] = await _orchestrator(app_sessions, farms, provider).run_turn(
+        caller, farm, _msg("Mes parcelles ?")
+    )
+    assert reply.text == "Accès refusé."
+    tool_result = provider.calls[1]["messages"][-1]["content"][0]
+    assert tool_result["is_error"] and "droits" in tool_result["content"]
+    async with farm_session(app_sessions, result.farm_id) as session:
+        assert (await session.scalars(select(Connection))).one().status == "active"
 
 
 async def test_photo_without_caption_or_without_plantnet(

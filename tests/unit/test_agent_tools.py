@@ -3,14 +3,12 @@ import uuid
 from datetime import date
 from typing import Any
 
-import pytest
 from pydantic import BaseModel
 
 from aiffel.orchestrator.runtime import AgentRuntime, parse_markdown
 from aiffel.tools.catalog import phase1_tools
 from aiffel.tools.registry import (
     MAX_RESULT_CHARS,
-    ToolAbort,
     ToolContext,
     ToolGateway,
     ToolOutput,
@@ -41,10 +39,6 @@ async def _huge(_ctx: ToolContext, _args: Any) -> ToolOutput:
     return ToolOutput("x" * (MAX_RESULT_CHARS * 2), "test")
 
 
-async def _abort(_ctx: ToolContext, _args: Any) -> ToolOutput:
-    raise ToolAbort("stop")
-
-
 GATEWAY = ToolGateway(
     [
         ToolSpec("echo", "écho", _echo, EchoInput),
@@ -52,7 +46,6 @@ GATEWAY = ToolGateway(
         ToolSpec("needs_eky", "ekylibre", _echo, EchoInput, requires="ekylibre"),
         ToolSpec("writer", "écrit", _echo, EchoInput, access="write"),
         ToolSpec("huge", "gros", _huge),
-        ToolSpec("abort", "stop", _abort),
     ]
 )
 
@@ -88,11 +81,6 @@ async def test_invalid_input_and_framing() -> None:
 async def test_large_results_are_truncated() -> None:
     result = await GATEWAY.execute(_ctx(), "huge", {})
     assert len(result.content) < MAX_RESULT_CHARS + 100 and "tronqué" in result.content
-
-
-async def test_abort_propagates() -> None:
-    with pytest.raises(ToolAbort):
-        await GATEWAY.execute(_ctx(), "abort", {})
 
 
 def test_tool_definitions_are_valid_for_the_api() -> None:
