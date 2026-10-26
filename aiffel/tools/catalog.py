@@ -20,10 +20,14 @@ from aiffel.actions.mapping import DoseUnit, Draft, DraftInput, MappingError, sl
 from aiffel.connectors.ekylibre.client import EkylibreError, EkylibreUnauthorized
 from aiffel.connectors.lexicon.client import LexiconError
 from aiffel.connectors.plantnet.client import NO_RESULT, SOURCE, PlantNetError
-from aiffel.tools.registry import ToolAbort, ToolContext, ToolFailure, ToolOutput, ToolSpec
+from aiffel.tools.registry import ToolContext, ToolFailure, ToolOutput, ToolSpec
 
 EKYLIBRE = "Ekylibre"
-RECONNECT_REASON = "ekylibre_unauthorized"
+EKYLIBRE_REFUSED = (
+    "Le jeton Ekylibre a été refusé : la connexion est à refaire. N'appelle plus Ekylibre pendant "
+    "ce tour ; réponds avec les autres informations, sans inventer les données de la ferme."
+)
+EKYLIBRE_DENIED = "Ekylibre a refusé l'accès à cette donnée (droits du compte)."
 MAX_PAGES = 5
 
 
@@ -32,13 +36,31 @@ def _norm(text: str) -> str:
     return "".join(c for c in folded if not unicodedata.combining(c))
 
 
+async def _token_refused(client: Any) -> bool:
+    """Confirme un ``401`` par ``users/me`` : seul un refus de ce point-là vaut jeton révoqué."""
+    try:
+        await client.me()
+    except EkylibreUnauthorized:
+        return True
+    except EkylibreError:
+        return False
+    return False
+
+
 async def _ekylibre(ctx: ToolContext, method: str, *args: Any, **kwargs: Any) -> Any:
     if ctx.ekylibre is None:
         raise ToolFailure("Ekylibre n'est pas connecté pour cette ferme.")
+    if ctx.ekylibre_refused:
+        raise ToolFailure(EKYLIBRE_REFUSED)
     try:
         return await getattr(ctx.ekylibre, method)(*args, **kwargs)
     except EkylibreUnauthorized:
-        raise ToolAbort(RECONNECT_REASON) from None
+        # Échec de l'outil, pas du tour : les autres résultats (Pl@ntNet, Lexicon…) restent
+        # utilisables. L'orchestrateur marque la connexion à refaire après la réponse.
+        if await _token_refused(ctx.ekylibre):
+            ctx.ekylibre_refused = True
+            raise ToolFailure(EKYLIBRE_REFUSED) from None
+        raise ToolFailure(EKYLIBRE_DENIED) from None
     except EkylibreError as exc:
         raise ToolFailure(f"Ekylibre : {exc}") from None
 
