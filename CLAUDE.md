@@ -78,6 +78,10 @@ le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le
   y mettre d'identifiant interne, de secret ou d'horodatage dans la partie stable.
 - Ajouter un outil : un `ToolSpec` dans `aiffel/tools/catalog.py` (modèle Pydantic en entrée, `ToolOutput`
   avec sa source). Les écritures (`access="write"`) sont refusées par la passerelle jusqu'à A5.
+- Un outil n'interrompt jamais le tour : il lève `ToolFailure`, que le modèle voit. Un `401` Ekylibre
+  est confirmé par `users/me` ; s'il l'est, `ctx.ekylibre_refused` bloque les appels Ekylibre suivants,
+  et l'orchestrateur marque la connexion « à reconnecter » puis ajoute le message de reconnexion
+  après la réponse.
 - Schémas des outils Lexicon figés dans `aiffel/connectors/lexicon/tool_schemas.json` (cache de prompt).
 - Écritures (A5) : l'outil `ekylibre_proposer_intervention` (`access="propose"`) crée une `PendingAction`
   via `aiffel/actions/service.py` ; le récapitulatif affiché est **généré par le code**. Seul le
