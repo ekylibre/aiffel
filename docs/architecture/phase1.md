@@ -122,7 +122,11 @@ l'authentification Ekylibre derrière une interface (`EkylibreAuth`) pour pouvoi
    son email et son mot de passe Ekylibre. Aiffel appelle `POST /api/v2/tokens` et **ne garde que le jeton**,
    chiffré (ADR-06). Le mot de passe n'est jamais stocké ni journalisé.
 2. Aiffel **n'appelle jamais** `DELETE /api/v2/tokens` (ce qui déconnecterait les autres clients). Un
-   `401` met la connexion en état « à reconnecter » et l'utilisateur est prévenu sur Telegram.
+   `401` met la connexion en état « à reconnecter » et l'utilisateur est prévenu sur Telegram. Pendant
+   un tour de l'agent, le refus est d'abord **confirmé par `users/me`** : confirmé, la connexion passe
+   « à reconnecter » après la réponse ; sinon, c'est un refus d'accès à une donnée et la connexion reste
+   active. Dans les deux cas, ce n'est qu'un échec de l'outil : le tour continue et les autres résultats
+   (Pl@ntNet, Lexicon…) ne sont pas perdus.
 3. **Moindre privilège côté Aiffel** : l'adaptateur n'expose que les outils de la phase 1 (§5). Aucun
    appel API hors de cette liste n'est possible, même si le jeton le permettrait.
 4. Le prototype est **réservé aux fermes pilotes** (`demo` et quelques exploitations volontaires informées).
