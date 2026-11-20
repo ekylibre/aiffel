@@ -20,10 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # L'image inclut les sous-modules (extensions/) : ``submodules: recursive`` les récupère.
-          # Un sous-module privé reste vide pour une CI publique ; c'est ce qu'on veut en mode libre.
-          submodules: recursive
+        # Pas de ``submodules`` : ``ekylibre-billing`` est privé et son clone échoue avec le
+        # ``GITHUB_TOKEN`` par défaut. C'est ce qu'on veut : le dossier reste vide, le Dockerfile
+        # saute les extensions sans ``pyproject.toml`` et l'image publique n'embarque rien de la
+        # facturation (D-BYO, D-DEP). Les sous-modules publics actuels (aucun aujourd'hui) seraient
+        # à réactiver via un paramètre ``submodules: true`` filtré par URL le jour où il y en a.
 
       - uses: docker/setup-buildx-action@v3
 
