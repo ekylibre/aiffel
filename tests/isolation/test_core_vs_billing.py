@@ -17,8 +17,10 @@ CORE_ROOT = Path(__file__).resolve().parents[2] / "aiffel"
 # (il expose les protocoles consommés par le client et pourrait, à terme, référencer la
 # convention de nommage dans un commentaire ou un test de contrat).
 ALLOWED_FILES = {CORE_ROOT / "extensions.py"}
-# Paquets dont l'import est interdit dans le cœur.
-FORBIDDEN_TOP_LEVEL = {"aiffel_billing", "ekylibre_billing_client"}
+# Paquets dont l'import est interdit dans le cœur. ``aiffel_billing`` est l'ancien nom (renommé
+# en ``ekylibre_billing`` lors du pivot ADR-10) ; on le garde par défense en profondeur, pour
+# attraper toute résurgence dans une PR ancienne.
+FORBIDDEN_TOP_LEVEL = {"aiffel_billing", "ekylibre_billing", "ekylibre_billing_client"}
 
 
 def _python_files() -> list[Path]:
