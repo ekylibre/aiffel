@@ -1,0 +1,118 @@
+# Stack d'installation libre d'Aiffel (BYO strict, ADR-10, D-BYO).
+#
+# Mode « auto-hébergé sans billing » : l'utilisateur fournit toutes les clés et héberge sa propre
+# base. Aucun service de facturation n'est inclus, aucun appel sortant vers ``ekylibre-billing``,
+# aucun quota, aucun essai gratuit. L'image est ``ghcr.io/ekylibre/aiffel:main`` par défaut (pas de
+# version taguée, pas de support : voir ``docs/ops/install-libre.md``).
+#
+# Services :
+#   - db      : Postgres 16, propriétaire ``aiffel``, volume local ``aiffel-libre-db``.
+#   - migrate : ``python -m aiffel.db.deploy`` + ``ALTER ROLE aiffel_app LOGIN PASSWORD``, s'arrête.
+#   - app     : FastAPI (webhook Telegram, page de raccordement, page de clé LLM) sur le port 8000.
+#   - worker  : traite la file des messages Telegram ; aucun port exposé.
+#
+# Démarrage :
+#   cp .env.libre.example .env
+#   <éditer .env avec vos clés>
+#   docker compose -f docker/compose.libre.yml up -d
+#
+# L'application est servie sur http://127.0.0.1:8000 par défaut ; pour que Telegram atteigne le
+# webhook, exposez cette URL en HTTPS (reverse-proxy, Caddy, Traefik…) et renseignez
+# ``AIFFEL_PUBLIC_BASE_URL``.
+
+name: aiffel-libre
+
+x-app-image: &app-image
+  image: ${AIFFEL_IMAGE:-ghcr.io/ekylibre/aiffel:main}
+
+x-app-env: &app-env
+  AIFFEL_ENV: ${AIFFEL_ENV:-production}
+  AIFFEL_LOG_LEVEL: ${AIFFEL_LOG_LEVEL:-INFO}
+  AIFFEL_PUBLIC_BASE_URL: ${AIFFEL_PUBLIC_BASE_URL:?requise (p. ex. https://aiffel.example.com)}
+  AIFFEL_DATABASE_URL: postgresql+psycopg://aiffel_app:${AIFFEL_APP_PASSWORD:?requise}@db:5432/aiffel
+  AIFFEL_MASTER_KEY: ${AIFFEL_MASTER_KEY:?requise}
+  AIFFEL_HASH_SALT: ${AIFFEL_HASH_SALT:?requise}
+  AIFFEL_TELEGRAM_BOT_TOKEN: ${AIFFEL_TELEGRAM_BOT_TOKEN:?requise}
+  AIFFEL_TELEGRAM_WEBHOOK_SECRET: ${AIFFEL_TELEGRAM_WEBHOOK_SECRET:?requise}
+  AIFFEL_ANTHROPIC_API_KEY: ${AIFFEL_ANTHROPIC_API_KEY:-}
+  AIFFEL_OPENROUTER_API_KEY: ${AIFFEL_OPENROUTER_API_KEY:-}
+  AIFFEL_PLANTNET_API_KEY: ${AIFFEL_PLANTNET_API_KEY:-}
+  AIFFEL_LLM_PROVIDER: ${AIFFEL_LLM_PROVIDER:-anthropic}
+  AIFFEL_LLM_MODEL: ${AIFFEL_LLM_MODEL:-claude-opus-5-5}
+  AIFFEL_LLM_EFFORT: ${AIFFEL_LLM_EFFORT:-medium}
+  AIFFEL_STT_ENABLED: ${AIFFEL_STT_ENABLED:-true}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aiffel
+      POSTGRES_USER: aiffel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?requise}
+    volumes:
+      - aiffel-libre-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiffel -d aiffel"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - aiffel-libre
+
+  migrate:
+    <<: *app-image
+    command: ["python", "-m", "aiffel.db.deploy"]
+    environment:
+      AIFFEL_MIGRATION_DATABASE_URL: postgresql+psycopg://aiffel:${POSTGRES_PASSWORD}@db:5432/aiffel
+      AIFFEL_APP_PASSWORD: ${AIFFEL_APP_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - aiffel-libre
+
+  app:
+    <<: *app-image
+    environment:
+      <<: *app-env
+    ports:
+      - "${AIFFEL_HTTP_BIND:-127.0.0.1}:${AIFFEL_HTTP_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - aiffel-libre
+
+  worker:
+    <<: *app-image
+    command: ["python", "-m", "aiffel.worker"]
+    environment:
+      <<: *app-env
+    healthcheck:
+      disable: true
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - aiffel-libre
+
+volumes:
+  aiffel-libre-db:
+
+networks:
+  aiffel-libre:
+    driver: bridge
