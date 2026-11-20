@@ -39,9 +39,12 @@ def _forbidden_imports(path: Path) -> list[str]:
             for alias in node.names:
                 if _top_level(alias.name) in FORBIDDEN_TOP_LEVEL:
                     found.append(alias.name)
-        elif isinstance(node, ast.ImportFrom):
-            if node.module and _top_level(node.module) in FORBIDDEN_TOP_LEVEL:
-                found.append(node.module)
+        elif (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and _top_level(node.module) in FORBIDDEN_TOP_LEVEL
+        ):
+            found.append(node.module)
     return found
 
 
