@@ -7,6 +7,18 @@
 > morceau indépendant, testable, revu avant fusion.
 > Étape suivante : `/sc:implement`, lot par lot, dans l'ordre donné ci-dessous.
 
+## État au 2026-11-20
+
+| Tranche | Statut | Détail |
+|---|---|---|
+| **T1** | ✅ Livré | `ekylibre/aiffel#34` (planning + test d'isolation + rename du sous-module) + `ekylibre/ekylibre-billing#7` (renommage paquet, squelette `api/internal.py`, client façade, fix horloge `outbox.enqueue`). T1-safe-4 (préfixer les tables `billing`) **reporté** jusqu'à la séparation DB. |
+| **T2** | ⏳ Bloqué | API Fourmy côté équipe Fourmy pas encore disponible. |
+| **T3** | ✅ Livré (hors T3-4) | `ekylibre/aiffel#36` (`compose.libre.yml`, `.env.libre.example`, `docs/ops/install-libre.md`, workflow `publish.yml`) + `ekylibre/aiffel#37` (fix workflow qui tentait de cloner le sous-module privé). Image `ghcr.io/ekylibre/aiffel:main` publiée. T3-4 (test E2E contre faux Fourmy) et T3-6 (section appairage Fourmy/Lyvre de la doc) restent à faire avec T2. |
+| **T4** | ⏳ Bloqué | API Lyvre côté équipe Lyvre pas encore disponible. |
+| **T5** | ⏳ À démarrer | Accès au dépôt `ekylibre-sas` requis. |
+
+Chantier hors tranche : **Q7** (mentions légales du vendeur : `plans.py:SELLER.share_capital` et `rcs_city` à renseigner avec les vraies valeurs Ekylibre SAS pour débloquer l'émission des factures).
+
 ## 0. Objectif et critères de réussite
 
 Au terme de ce plan :
