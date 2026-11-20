@@ -1,0 +1,47 @@
+name: Publish image
+
+# Publication de l'image Docker publique d'Aiffel (mode installation libre, T3-3, D-REL).
+# Suit la branche ``main`` : chaque fusion y produit une nouvelle image ``:main`` (plus une étiquette
+# ``:sha-<abbrev>`` pour la traçabilité). Pas de version taguée, pas de garantie de stabilité
+# (voir docs/ops/install-libre.md).
+
+on:
+  push:
+    branches: [main]
+  # Ouvre la porte à une publication manuelle depuis l'UI GitHub, sans avoir à pousser un commit.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # L'image inclut les sous-modules (extensions/) : ``submodules: recursive`` les récupère.
+          # Un sous-module privé reste vide pour une CI publique ; c'est ce qu'on veut en mode libre.
+          submodules: recursive
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          # Image publique du mode libre : nom en minuscules (ghcr.io exige lowercase).
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/aiffel:main
+            ghcr.io/${{ github.repository_owner }}/aiffel:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
