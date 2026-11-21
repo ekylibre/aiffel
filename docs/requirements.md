@@ -2,6 +2,15 @@
 
 > Statut : brouillon issu de la session `/sc:brainstorm` du 2026-10-24.
 > Étape suivante : `/sc:design` (architecture) puis `/sc:workflow` (plan d'implémentation).
+>
+> **Pivot ADR-10 (fusionné le 2026-11-20).** Ce document garde son cadrage initial pour mémoire,
+> mais plusieurs exigences ont évolué depuis : Ekylibre n'est plus le système de référence
+> (F-CON-8, F-CON-9), il est remplacé par **Fourmy** ; les exigences d'offre et de facturation
+> (F-OFF-\*, F-PAY-\*, F-OSF-\*) sont reprises par le dépôt privé `ekylibre-billing`, qui gère
+> désormais les abonnements d'Aiffel, Fourmy et Lyvre. Aiffel s'installe aussi en auto-hébergement
+> libre (BYO strict, sans service de facturation). Voir
+ [`architecture/pivot_fourmy_billing.md`](architecture/pivot_fourmy_billing.md) et
+> [`../claudedocs/workflow_pivot_fourmy_billing.md`](../claudedocs/workflow_pivot_fourmy_billing.md).
 
 ## 1. Vision
 
