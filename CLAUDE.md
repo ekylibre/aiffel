@@ -1,12 +1,28 @@
 # CLAUDE.md
 
 Aiffel est un orchestrateur conversationnel qui fédère les logiciels d'une exploitation agricole
-(Ekylibre, Lexicon, puis Lyvre et d'autres) derrière Telegram, puis le web et le mobile.
+(Fourmy, Lyvre, Lexicon et d'autres) derrière Telegram, puis le web et le mobile. Il s'utilise en
+auto-hébergement libre (image publique `ghcr.io/ekylibre/aiffel:main`, BYO strict) ou via
+l'abonnement hébergé d'Ekylibre SAS (Aiffel + Fourmy + Lyvre, facturé par `ekylibre-billing`).
 
-- Exigences : `docs/requirements.md`
+- Exigences (brainstorm v0.1, à relire sous l'angle du pivot ADR-10) : `docs/requirements.md`
 - Architecture phase 1 (ADR) : `docs/architecture/phase1.md`
-- Plan d'implémentation : `claudedocs/workflow_phase1_prototype.md`
-- Déploiement Dokploy : `docs/ops/dokploy.md`
+- Architecture du pivot (ADR-10, supersède ADR-07) : `docs/architecture/pivot_fourmy_billing.md`
+- Plan d'implémentation phase 1 : `claudedocs/workflow_phase1_prototype.md`
+- Plan d'implémentation du pivot (état des tranches) : `claudedocs/workflow_pivot_fourmy_billing.md`
+- Installation libre (mode auto-hébergé) : `docs/ops/install-libre.md`
+- Déploiement Dokploy (offre hébergée) : `docs/ops/dokploy.md`
+
+## Pivot ADR-10 (fusionné le 2026-11-20)
+
+Aiffel remplace progressivement le connecteur Ekylibre par Fourmy (gestion agricole) et Lyvre
+(compta/paie, lecture seule). Tranches livrées : T1 (planning + test d'isolation + rename du
+sous-module) et T3 (mode auto-hébergé : `docker/compose.libre.yml`, docs, workflow `publish.yml`).
+Tranches en attente : T2 (connecteur Fourmy), T4 (connecteur Lyvre), T5 (vitrine ekylibre.com).
+
+Le code du connecteur Ekylibre (`aiffel/connectors/ekylibre/`, outil `ekylibre_proposer_intervention`,
+règles liées) reste en place tant que T2 n'est pas livré ; les sections ci-dessous le décrivent tel
+qu'il existe aujourd'hui dans le dépôt.
 
 ## Commandes
 
