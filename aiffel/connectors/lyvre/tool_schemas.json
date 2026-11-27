@@ -1,0 +1,448 @@
+{
+ "find_party": {
+  "title": "Recherche de tiers",
+  "domain": "parties",
+  "description": "Fournisseurs, clients et adhérents par nom, SIREN, SIRET, numéro de TVA ou e-mail (20 au plus).",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "query": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "query"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "get_agenda": {
+  "title": "Échéancier",
+  "domain": "agenda",
+  "description": "Échéancier de l'exploitation (TVA, impôts, MSA, PAC, baux…) entre deux dates : date, fiche, organisme, statut (à venir, à préparer, prête, faite, en retard), montant connu ou estimé, fiabilité ; et les points « À vérifier » du dossier (checks : à traiter ou pour information), à signaler en premier. Par défaut, de J-30 à J+60.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "from": {
+     "type": "string",
+     "description": "Début, AAAA-MM-JJ (facultatif)"
+    },
+    "to": {
+     "type": "string",
+     "description": "Fin, AAAA-MM-JJ (facultatif)"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "get_aids": {
+  "title": "Aides et subventions",
+  "domain": "agronomy",
+  "description": "Dossiers d'aides et subventions (PAC, DJA, investissement…) : montant acquis, versé, restant dû, alertes.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "campaign": {
+     "type": "string",
+     "description": "Campagne (année), facultative"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "get_balances": {
+  "title": "Soldes des comptes",
+  "domain": "accounting",
+  "description": "Soldes des comptes de l'exercice commençant par les préfixes donnés (ex. « 512 » banque, « 401 » fournisseurs, « 44 » TVA et État, « 646 » cotisations de l'exploitant).",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "prefixes": {
+     "type": "string",
+     "description": "Préfixes séparés par des espaces"
+    },
+    "fiscal_year": {
+     "type": "string",
+     "description": "Libellé de l'exercice (ex. « 2026 ») ; défaut : exercice en cours"
+    }
+   },
+   "required": [
+    "prefixes"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "get_bank_accounts": {
+  "title": "Comptes bancaires",
+  "domain": "bank",
+  "description": "Comptes bancaires : solde comptable au jour, date de la dernière transaction, transactions non rapprochées.",
+  "input_schema": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "get_closing_checks": {
+  "title": "Contrôles de clôture",
+  "domain": "accounting",
+  "description": "Contrôles de clôture de l'exercice (anomalies et informations) avec le lien vers l'écran.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "fiscal_year": {
+     "type": "string",
+     "description": "Libellé de l'exercice (ex. « 2026 ») ; défaut : exercice en cours"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "get_context": {
+  "title": "Dossier de la structure",
+  "domain": "*",
+  "description": "Identité et situation du dossier : forme juridique, régimes (impôt, BA, TVA), exercices et leur statut, profil agricole (productions, caisse MSA, démarches), date du jour.",
+  "input_schema": {
+   "type": "object",
+   "properties": {},
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "get_deadline_fiche": {
+  "title": "Fiche d'échéance",
+  "domain": "agenda",
+  "description": "Fiche complète d'une échéance du corpus (règles de date, applicabilité, sources).",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "Identifiant, ex. FIS-03"
+    }
+   },
+   "required": [
+    "id"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "get_margins": {
+  "title": "Marges par activité",
+  "domain": "agronomy",
+  "description": "Marges par activité et par atelier (production, charges opérationnelles, marge brute, par hectare ou par tête, résultat après auxiliaires).",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "fiscal_year": {
+     "type": "string",
+     "description": "Libellé de l'exercice (ex. « 2026 ») ; défaut : exercice en cours"
+    },
+    "campaign": {
+     "type": "string",
+     "description": "Campagne (année), facultative"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "get_msa": {
+  "title": "Cotisations MSA",
+  "domain": "tax",
+  "description": "Cotisations MSA : assiette sociale par exploitant, option triennale ou annuelle et délais, estimation indicative des cotisations, appels enregistrés et payés.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "fiscal_year": {
+     "type": "string",
+     "description": "Libellé de l'exercice (ex. « 2026 ») ; défaut : exercice en cours"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "get_parameter": {
+  "title": "Paramètre réglementaire",
+  "domain": "tax",
+  "description": "Paramètre réglementaire daté (seuil, taux, barème) : valeur à une date, source, fiabilité.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "key": {
+     "type": "string",
+     "description": "Clé du corpus, ex. ba.micro.threshold_cents"
+    },
+    "date": {
+     "type": "string",
+     "description": "AAAA-MM-JJ ; défaut : aujourd'hui"
+    }
+   },
+   "required": [
+    "key"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "get_purchase": {
+  "title": "Facture d'achat",
+  "domain": "purchases",
+  "description": "Une facture d'achat : lignes (compte, HT, TVA), règlements, motifs si elle est à compléter, lien.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "integer",
+     "description": "Identifiant (list_purchases)"
+    }
+   },
+   "required": [
+    "id"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "get_tax_result": {
+  "title": "Résultat fiscal",
+  "domain": "tax",
+  "description": "Résultat fiscal BA de l'exercice : passage du résultat comptable (stocks, abattage, JA, DEP, 73 A, plus-values…), répartition par associé, alertes.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "fiscal_year": {
+     "type": "string",
+     "description": "Libellé de l'exercice (ex. « 2026 ») ; défaut : exercice en cours"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "get_vat": {
+  "title": "Déclarations de TVA",
+  "domain": "tax",
+  "description": "Déclarations de TVA de l'exercice (CA12A, CA3, acomptes) : statut, montant dû, crédit, remboursement, échéance, date de dépôt.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "fiscal_year": {
+     "type": "string",
+     "description": "Libellé de l'exercice (ex. « 2026 ») ; défaut : exercice en cours"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "list_assets": {
+  "title": "Immobilisations",
+  "domain": "assets",
+  "description": "Immobilisations en service (ou toutes) : acquisition, mise en service, valeur, méthode, durée.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "include_disposed": {
+     "type": "boolean"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "list_bank_transactions": {
+  "title": "Transactions bancaires",
+  "domain": "bank",
+  "description": "Transactions bancaires, plus récentes d'abord, filtrées par compte, période, texte ou non rapprochées.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "bank_account_id": {
+     "type": "integer"
+    },
+    "text": {
+     "type": "string"
+    },
+    "unreconciled_only": {
+     "type": "boolean"
+    },
+    "date_from": {
+     "type": "string",
+     "description": "Début, AAAA-MM-JJ (facultatif)"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "Fin, AAAA-MM-JJ (facultatif)"
+    },
+    "limit": {
+     "type": "integer",
+     "description": "Nombre de lignes (défaut 20, au plus 50)"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "list_calculators": {
+  "title": "Calculettes disponibles",
+  "domain": "*",
+  "description": "Calculettes de Lyvre (fiscal, social, TVA, gestion, cultures, élevage, réglementaire) : code, titre, entrées attendues. À consulter avant run_calculator ; filtre facultatif sur un mot.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "query": {
+     "type": "string",
+     "description": "Mot recherché, ex. « DEP », « semis », « MSA »"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "list_purchases": {
+  "title": "Factures d'achat",
+  "domain": "purchases",
+  "description": "Factures d'achat, plus récentes d'abord : fournisseur, dates, TTC, restant à payer, état (comptabilisée, prête, à compléter) et lien. Filtre status : all, unpaid (à payer), overdue (échues), to_complete.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "status": {
+     "type": "string",
+     "enum": [
+      "all",
+      "unpaid",
+      "overdue",
+      "to_complete"
+     ]
+    },
+    "supplier": {
+     "type": "string",
+     "description": "Nom du fournisseur (partie du nom)"
+    },
+    "date_from": {
+     "type": "string",
+     "description": "Début, AAAA-MM-JJ (facultatif)"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "Fin, AAAA-MM-JJ (facultatif)"
+    },
+    "limit": {
+     "type": "integer",
+     "description": "Nombre de lignes (défaut 20, au plus 50)"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "list_sales": {
+  "title": "Pièces de vente",
+  "domain": "sales",
+  "description": "Devis, factures et avoirs de vente : numéro, client, dates, TTC, encaissé, statut, lien.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "kind": {
+     "type": "string",
+     "enum": [
+      "quote",
+      "invoice",
+      "credit_note"
+     ]
+    },
+    "unpaid_only": {
+     "type": "boolean",
+     "description": "Factures émises non soldées"
+    },
+    "date_from": {
+     "type": "string",
+     "description": "Début, AAAA-MM-JJ (facultatif)"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "Fin, AAAA-MM-JJ (facultatif)"
+    },
+    "limit": {
+     "type": "integer",
+     "description": "Nombre de lignes (défaut 20, au plus 50)"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ },
+ "run_calculator": {
+  "title": "Calculette",
+  "domain": "*",
+  "description": "Exécute une calculette (même calcul que l'écran Outils › Calculettes : méthode, paramètres datés et sources) sans rien enregistrer. Valeurs en paires clé / valeur (clés de list_calculators) ; prefill : compléter avec les chiffres de la structure quand la calculette le permet.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "code": {
+     "type": "string",
+     "description": "Code de la calculette, ex. dep, micro-ba, calc-dose-semis"
+    },
+    "values": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "key": {
+        "type": "string"
+       },
+       "value": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "key",
+       "value"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "prefill": {
+     "type": "boolean",
+     "description": "Préremplir depuis la structure (défaut : non)"
+    }
+   },
+   "required": [
+    "code",
+    "values"
+   ],
+   "additionalProperties": false
+  }
+ },
+ "search_entries": {
+  "title": "Recherche d'écritures",
+  "domain": "accounting",
+  "description": "Lignes d'écriture de l'exercice (20 au plus, plus récentes d'abord), filtrées par compte, texte ou dates.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "fiscal_year": {
+     "type": "string",
+     "description": "Libellé de l'exercice (ex. « 2026 ») ; défaut : exercice en cours"
+    },
+    "account_prefix": {
+     "type": "string"
+    },
+    "text": {
+     "type": "string"
+    },
+    "date_from": {
+     "type": "string"
+    },
+    "date_to": {
+     "type": "string"
+    }
+   },
+   "required": [],
+   "additionalProperties": false
+  }
+ }
+}

@@ -231,20 +231,26 @@ Fourmy, pour éviter de reproduire l'écueil Ekylibre (ADR-07 historique).
 
 ### 4.2 Aiffel → Lyvre (connecteur T-L)
 
-Lecture seule à ce stade. Objectif : répondre aux questions compta/paie
-courantes de l'exploitant (« combien ai-je dépensé en phytos cette
-campagne ? », « coût du chantier moissons ? »).
+Lecture seule. Objectif : répondre aux questions compta/paie courantes de l'exploitant (« combien
+ai-je dépensé en engrais cette campagne ? », « qu'est-ce que je dois payer ce mois-ci ? »).
 
-| Endpoint | Méthode | Rôle |
-|---|---|---|
-| `/api/v1/accounting/expenses` | GET | Dépenses filtrables par période, catégorie, fournisseur |
-| `/api/v1/accounting/revenues` | GET | Recettes par période, canal de vente |
-| `/api/v1/payroll/costs` | GET | Coûts de personnel par période et par chantier |
-| `/api/v1/invoices` | GET | Factures émises/reçues, filtrables |
-| `/api/v1/tokens` | POST | Jeton |
-| `/api/v1/users/me` | GET | Vérification |
+**Contrat réel (T4, 2026-11-27)**, qui remplace la première ébauche d'endpoints
+(`/accounting/expenses`, `/tokens` par e-mail et mot de passe) : Lyvre a livré un accès par **clé
+d'API** et des **outils d'agent** (`doc/api_mcp.md` et `claudedocs/design_api_mcp_aiffel.md` du dépôt
+`ekylibre/lyvre`).
 
-Pas d'écriture Lyvre dans cette phase (hors périmètre).
+| Accès | Rôle |
+|---|---|
+| `GET /api/v1/agent/tools` | Outils ouverts à la clé, avec domaine et accès (lecture/écriture) ; sert à vérifier la clé et à relever ses domaines |
+| `POST /api/v1/agent/tools/<outil>` | Exécute un outil (corps = arguments) ; mêmes outils que le serveur MCP `/mcp` |
+
+- Authentification : `Authorization: Bearer lyv_…`. Une clé = une structure + un utilisateur +
+  des domaines (Comptabilité, Banque, Achats, Ventes, Tiers, TVA et fiscal, Immobilisations,
+  Agronomie, Échéancier). Erreurs : 401 (clé refusée), 403 (domaine non lu), 422 (erreur d'outil),
+  429 (`Retry-After`).
+- Aiffel n'expose que les **21 outils de lecture** (`connectors/lyvre/tool_schemas.json`) ; les
+  outils d'écriture de Lyvre (brouillons d'achats, d'écritures, de tiers) ne sont pas exposés.
+- REST plutôt que MCP côté Aiffel : même registre, codes HTTP explicites, pas de session.
 
 ### 4.3 Aiffel → `ekylibre-billing` (via `ekylibre-billing-client`)
 
