@@ -28,7 +28,7 @@ log = structlog.get_logger()
 MAX_RESULT_CHARS = 20_000
 TOOL_TIMEOUT_S = 30.0
 Role = Literal["owner", "worker"]
-Requirement = Literal["ekylibre", "lexicon", "plantnet"]
+Requirement = Literal["ekylibre", "lexicon", "plantnet", "lyvre"]
 
 
 class ToolFailure(Exception):
@@ -37,6 +37,10 @@ class ToolFailure(Exception):
 
 class LexiconLike(Protocol):
     async def call(self, name: str, arguments: dict[str, Any]) -> Any: ...
+
+
+class LyvreLike(Protocol):
+    async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class PlantNetLike(Protocol):
@@ -70,8 +74,16 @@ class ToolContext:
     # ne les voit pas.
     plantnet: PlantNetLike | None = None
     photos: list[bytes] = field(default_factory=list, repr=False)
+    # Lyvre (comptabilité) : client de la ferme, exploitants seulement, et domaines que sa clé lit.
+    lyvre: LyvreLike | None = None
+    lyvre_domains: frozenset[str] = frozenset()
+    # Clé Lyvre refusée pendant le tour : connexion à refaire après la réponse.
+    lyvre_refused: bool = False
 
-    def has(self, requirement: Requirement | None) -> bool:
+    def has(self, requirement: Requirement | None, domain: str | None = None) -> bool:
+        if requirement == "lyvre":
+            open_domain = domain in (None, "*") or domain in self.lyvre_domains
+            return self.lyvre is not None and open_domain
         if requirement == "ekylibre":
             return self.ekylibre is not None
         if requirement == "lexicon":
@@ -103,6 +115,8 @@ class ToolSpec:
     access: Literal["read", "propose", "write"] = "read"
     roles: frozenset[str] = frozenset({"owner", "worker"})
     requires: Requirement | None = None
+    # Domaine de la source (Lyvre : « accounting », « bank »…) que le contexte doit ouvrir.
+    domain: str | None = None
 
     def schema(self) -> dict[str, Any]:
         if self.input_model is not None:
@@ -144,7 +158,7 @@ class ToolGateway:
         return [
             spec
             for name, spec in sorted(self._specs.items())
-            if ctx.role in spec.roles and ctx.has(spec.requires)
+            if ctx.role in spec.roles and ctx.has(spec.requires, spec.domain)
         ]
 
     def definitions(self, ctx: ToolContext) -> list[dict[str, Any]]:
@@ -153,7 +167,7 @@ class ToolGateway:
     async def execute(self, ctx: ToolContext, name: str, raw_input: dict[str, Any]) -> ToolResult:
         spec = self._specs.get(name)
         # Hook pre_tool : outil inconnu, rôle ou source manquants → refus, quoi que dise le modèle.
-        if spec is None or ctx.role not in spec.roles or not ctx.has(spec.requires):
+        if spec is None or ctx.role not in spec.roles or not ctx.has(spec.requires, spec.domain):
             log.warning("tool.denied", tool=name)
             return ToolResult(f"Outil « {name} » indisponible.", is_error=True)
         if spec.access == "write":

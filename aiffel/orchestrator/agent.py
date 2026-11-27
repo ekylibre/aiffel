@@ -20,11 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from aiffel.actions.service import ActionService, callback_data
 from aiffel.channels.base import Button, InboundKind, InboundMessage, OutboundMessage
 from aiffel.channels.dispatcher import Caller
+from aiffel.connectors.lyvre.client import DOMAIN_LABELS
 from aiffel.db.models import Conversation, FarmMemory, Message
 from aiffel.db.session import farm_session
 from aiffel.extensions import UsageEvent, UsageHook
 from aiffel.farm_context import EkylibreAccess, FarmContextService, FarmRef
 from aiffel.farm_llm import NoPlatformCredit, ResolvedLLM
+from aiffel.lyvre import LyvreAccess, LyvreService
 from aiffel.memory import CALLBACK_PREFIX as MEMORY_PREFIX
 from aiffel.memory import MemoryService
 from aiffel.orchestrator.llm import LLMError, LLMProvider, SystemPrompt, Usage
@@ -41,6 +43,10 @@ MAX_TURN_TOKENS = 400_000
 RECONNECT = (
     "Ekylibre a refusé l'accès (déconnexion depuis un autre appareil ou mot de passe changé). "
     "Envoyez /start pour vous reconnecter."
+)
+LYVRE_RECONNECT = (
+    "🔑 Lyvre a refusé la clé de la ferme (révoquée ou expirée). Créez-en une nouvelle dans Lyvre "
+    "(Configuration, puis Accès API) et enregistrez-la avec /lyvre."
 )
 UNAVAILABLE = "Je ne peux pas répondre pour le moment (service indisponible). Réessayez plus tard."
 REFUSED = "Je ne peux pas traiter cette demande. Reformulez-la, ou envoyez /aide."
@@ -102,6 +108,8 @@ class Orchestrator:
     memory: MemoryService | None = None
     # Photos : Pl@ntNet et le téléchargement auprès du canal (en mémoire, borné).
     plantnet: PlantNetLike | None = None
+    # Comptabilité de la ferme (Lyvre), lue pour les exploitants seulement.
+    lyvre: LyvreService | None = None
     fetch_photo: Callable[[str, int], Awaitable[bytes]] | None = None
     photo_max_bytes: int = 10 * 1024 * 1024
 
@@ -144,6 +152,11 @@ class Orchestrator:
         access = await self.farms.ekylibre(farm, caller.user_id)
         if access is not None and access.client is None:
             return [OutboundMessage(text=RECONNECT)]
+        lyvre = (
+            await self.lyvre.access(farm.farm_id)
+            if self.lyvre is not None and farm.role == "owner"
+            else None
+        )
 
         photos: list[bytes] = []
         if analyse_photo and self.fetch_photo is not None:
@@ -170,6 +183,8 @@ class Orchestrator:
             memory=self.memory,
             plantnet=self.plantnet,
             photos=photos,
+            lyvre=lyvre.client if lyvre else None,
+            lyvre_domains=lyvre.reads if lyvre else frozenset(),
         )
         open_proposal = (
             await self.actions.open_proposal(farm.farm_id, caller.user_id, "intervention")
@@ -191,8 +206,12 @@ class Orchestrator:
             return [
                 OutboundMessage(text=UNAVAILABLE),
                 *await self._after_refusal(ctx, farm, access, caller.user_id),
+                *await self._after_lyvre_refusal(ctx, farm, lyvre, caller.user_id),
             ]
-        reconnect = await self._after_refusal(ctx, farm, access, caller.user_id)
+        reconnect = [
+            *await self._after_refusal(ctx, farm, access, caller.user_id),
+            *await self._after_lyvre_refusal(ctx, farm, lyvre, caller.user_id),
+        ]
 
         # L'historique ne garde que du texte : on y note qu'une photo accompagnait la question.
         recorded = f"[Photo] {text}" if photos else text
@@ -246,6 +265,15 @@ class Orchestrator:
             return []
         await self.farms.mark_needs_reconnect(farm, access.connection_id, user_id)
         return [OutboundMessage(text=RECONNECT)]
+
+    async def _after_lyvre_refusal(
+        self, ctx: ToolContext, farm: FarmRef, lyvre: LyvreAccess | None, user_id: uuid.UUID
+    ) -> list[OutboundMessage]:
+        """Clé Lyvre refusée pendant le tour : connexion à refaire, et l'exploitant le sait."""
+        if not ctx.lyvre_refused or lyvre is None or self.lyvre is None:
+            return []
+        await self.lyvre.mark_needs_reconnect(farm.farm_id, lyvre.connection_id, user_id)
+        return [OutboundMessage(text=LYVRE_RECONNECT)]
 
     async def _loop(
         self,
@@ -312,6 +340,14 @@ class Orchestrator:
             f"- Date du jour : {ctx.today.isoformat()} (campagne en cours : {ctx.today.year})",
             f"- Ekylibre : {'connecté' if ctx.ekylibre else 'non connecté'}",
         ]
+        if ctx.role == "owner":
+            if ctx.lyvre is not None:
+                domains = ", ".join(DOMAIN_LABELS.get(d, d) for d in sorted(ctx.lyvre_domains))
+                lines.append(f"- Lyvre (comptabilité) : connecté, domaines lus : {domains}")
+            else:
+                lines.append(
+                    "- Lyvre (comptabilité) : non connecté (l'exploitant le raccorde avec /lyvre)"
+                )
         if ctx.aliases:
             lines.append(
                 "- Noms usuels confirmés : "

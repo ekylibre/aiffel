@@ -50,7 +50,8 @@ Toutes se saisissent dans l'onglet « Environment » de Dokploy, pas dans `.env`
 
 Variables facultatives (valeur par défaut dans `compose.dokploy.yml`) :
 `AIFFEL_LOG_LEVEL`, `AIFFEL_LLM_PROVIDER`, `AIFFEL_LLM_MODEL`, `AIFFEL_LLM_EFFORT`,
-`AIFFEL_EKYLIBRE_ALLOWED_DOMAINS`, `AIFFEL_STT_ENABLED`.
+`AIFFEL_EKYLIBRE_ALLOWED_DOMAINS`, `AIFFEL_STT_ENABLED`, `AIFFEL_LYVRE_DEFAULT_URL`,
+`AIFFEL_LYVRE_ALLOWED_DOMAINS` (à passer dans `compose.dokploy.yml` si on change leurs défauts).
 
 ### Aiffel en ligne : client du billing
 

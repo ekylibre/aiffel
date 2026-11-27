@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aiffel import __version__
 from aiffel.app.container import Services, build_services, is_fully_configured
+from aiffel.app.lyvre_routes import lyvre_router
 from aiffel.app.telegram_routes import telegram_router
 from aiffel.app.web_routes import llm_key_router, web_router
 from aiffel.db.session import make_engine, make_sessionmaker
@@ -55,6 +56,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 secure_cookies=settings.public_base_url.startswith("https://"),
             )
         )
+        if services.lyvre is not None:
+            app.include_router(
+                lyvre_router(
+                    services.pairing,
+                    services.farms,
+                    services.lyvre,
+                    services.notify,
+                    settings.lyvre_default_url,
+                    secure_cookies=settings.public_base_url.startswith("https://"),
+                )
+            )
         if services.llm is not None:
             app.include_router(
                 llm_key_router(

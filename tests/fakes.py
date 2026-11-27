@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
 
@@ -157,6 +157,115 @@ class FakeEkylibre:
             self.interventions[key] = {"id": 1000 + len(self.interventions), "body": body}
             return httpx.Response(201, json={"id": self.interventions[key]["id"]})
         return httpx.Response(404, json={"message": "Not found"})
+
+    def client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(transport=httpx.MockTransport(self.handler))
+
+
+# --- Lyvre (comptabilité, T4) ------------------------------------------------------------------
+
+LYVRE_KEY = "lyv_test_0123456789abcdefghij"  # clé factice
+
+
+@dataclass
+class FakeLyvre:
+    """Installation Lyvre : outils d'agent par REST, clé unique, domaines de la clé réglables.
+
+    ``revoked`` simule une clé révoquée (401), ``rate_limited`` un dépassement de débit (429).
+    ``requests`` garde (méthode, chemin, corps) de chaque appel ; les en-têtes gardés à part.
+    """
+
+    host: str = "app.lyvre.org"
+    key: str = LYVRE_KEY
+    reads: set[str] = field(default_factory=lambda: {"accounting", "purchases", "bank"})
+    writes: set[str] = field(default_factory=set)
+    revoked: bool = False
+    rate_limited: bool = False
+    requests: list[tuple[str, str, Any]] = field(default_factory=list)
+    authorizations: list[str] = field(default_factory=list)
+
+    WRITE_TOOLS: ClassVar[dict[str, str]] = {
+        "create_purchase_draft": "purchases",
+        "attach_document": "purchases",
+        "create_supplier": "parties",
+        "create_entry_draft": "accounting",
+    }
+
+    def _tools(self) -> list[dict[str, Any]]:
+        from aiffel.connectors.lyvre.client import TOOL_SCHEMAS
+
+        items = [
+            {"name": name, "domain": spec["domain"], "access": "read"}
+            for name, spec in TOOL_SCHEMAS.items()
+            if spec["domain"] == "*" or spec["domain"] in self.reads
+        ]
+        items += [
+            {"name": name, "domain": domain, "access": "write"}
+            for name, domain in self.WRITE_TOOLS.items()
+            if domain in self.writes
+        ]
+        return items
+
+    def _result(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
+        if name == "get_context":
+            return {
+                "structure": {"name": "GAEC des Essais", "legal_form": "GAEC"},
+                "fiscal_years": [{"label": "2026", "start": "2026-01-01", "end": "2026-12-31"}],
+                "today": "2026-11-27",
+            }
+        if name == "list_purchases":
+            return {
+                "items": [
+                    {
+                        "id": 12,
+                        "supplier": args.get("supplier") or "Coop du Pays",
+                        "date": "2026-03-04",
+                        "total_ttc": "1 200,00",
+                        "url": f"https://{self.host}/purchases/12",
+                    }
+                ],
+                "total": 1,
+            }
+        if name == "get_balances":
+            return {"accounts": [{"number": "60111", "label": "Engrais", "balance": "8 450,00"}]}
+        return {"ok": True, "tool": name}
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        if request.url.host != self.host:
+            raise httpx.ConnectError("hôte inconnu", request=request)
+        body = json.loads(request.content) if request.content else None
+        self.requests.append((request.method, request.url.path, body))
+        self.authorizations.append(request.headers.get("Authorization", ""))
+        if request.headers.get("Authorization") != f"Bearer {self.key}" or self.revoked:
+            return httpx.Response(
+                401,
+                json={"error": {"code": "invalid_api_key", "message": "Clé d'API invalide."}},
+            )
+        if self.rate_limited:
+            return httpx.Response(
+                429,
+                headers={"Retry-After": "12"},
+                json={"error": {"code": "rate_limited", "message": "Trop de requêtes."}},
+            )
+        path = request.url.path
+        if request.method == "GET" and path == "/api/v1/agent/tools":
+            return httpx.Response(200, json={"items": self._tools()})
+        prefix = "/api/v1/agent/tools/"
+        if request.method == "POST" and path.startswith(prefix):
+            name = path.removeprefix(prefix)
+            allowed = {t["name"] for t in self._tools()}
+            if name not in allowed:
+                return httpx.Response(
+                    403,
+                    json={
+                        "error": {
+                            "code": "domain_forbidden",
+                            "message": "La clé « Aiffel » ne lit pas ce domaine.",
+                        }
+                    },
+                )
+            return httpx.Response(200, json={"result": self._result(name, body or {})})
+        return httpx.Response(404, json={"error": {"code": "not_found", "message": "Inconnu."}})
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handler))

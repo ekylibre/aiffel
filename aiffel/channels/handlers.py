@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from aiffel.actions.service import ActionService, Outcome, parse_callback
 from aiffel.channels.base import Button, InboundKind, InboundMessage, OutboundMessage
 from aiffel.channels.dispatcher import UNSUPPORTED, WELCOME, Caller
+from aiffel.channels.lyvre_menu import PREFIX as LYVRE_PREFIX
+from aiffel.channels.lyvre_menu import LyvreMenu
 from aiffel.connectors.ekylibre.client import EkylibreError, EkylibreUnauthorized
 from aiffel.extensions import CommandHandler, Extension
 from aiffel.farm_context import FarmContextService, FarmRef
@@ -24,6 +26,7 @@ HELP_LINES = (
     "• /modele : le modèle d'IA de la ferme (et votre propre clé)",
     "• /memoire : ce que je retiens de votre ferme (noms usuels des parcelles)",
     "• /droits : qui peut valider les enregistrements dans Ekylibre",
+    "• /lyvre : raccorder la comptabilité Lyvre de la ferme (exploitant)",
     "• /start : relier ou reconnecter votre compte Ekylibre",
     "• /aide : ce message",
 )
@@ -70,6 +73,7 @@ class Handlers:
     extensions: list[Extension] = field(default_factory=list)
     memory: MemoryService | None = None
     rights: RightsService | None = None
+    lyvre: LyvreMenu | None = None
 
     def _command(self, name: str | None) -> CommandHandler | None:
         return next((e.commands[name] for e in self.extensions if name in e.commands), None)
@@ -125,6 +129,8 @@ class Handlers:
                 return await self._memory_list(self.memory, farm)
             if message.command == "droits" and self.rights is not None:
                 return await self._rights_menu(self.rights, caller, farm)
+            if message.command == "lyvre" and self.lyvre is not None:
+                return await self.lyvre.command(caller, farm)
             if (command := self._command(message.command)) is not None:
                 return await command(caller, farm, message)
         if message.kind is InboundKind.VOICE and self.voice is not None and message.file_id:
@@ -179,6 +185,8 @@ class Handlers:
             return await self._memory_callback(self.memory, caller, farm, data)
         if data.startswith(f"{RIGHTS_PREFIX}:") and self.rights is not None:
             return await self._rights_callback(self.rights, caller, farm, data)
+        if data.startswith(f"{LYVRE_PREFIX}:") and self.lyvre is not None:
+            return await self.lyvre.callback(caller, farm, data)
         if (callback := self._extension_callback(message.callback_data)) is not None:
             return await callback(caller, farm, message)
         parsed = parse_callback(message.callback_data)

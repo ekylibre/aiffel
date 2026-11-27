@@ -53,7 +53,7 @@ le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le
 | `aiffel/channels/` | Adaptateurs de canaux (Telegram) |
 | `aiffel/orchestrator/` | Boucle d'outils, `LLMProvider`, chargement des skills et des rules |
 | `aiffel/tools/` | Passerelle d'outils : registre, contexte ferme, filtrage par rôle et capacités |
-| `aiffel/connectors/` | Ekylibre (REST v2, `EkylibreAuth`), Lexicon (client MCP) |
+| `aiffel/connectors/` | Ekylibre (REST v2, `EkylibreAuth`), Lexicon (client MCP), Lyvre (outils d'agent REST, clé `lyv_…`), Pl@ntNet |
 | `aiffel/hooks/` | Hooks déterministes : `pre_tool`, `pre_write`, `post_tool`, `on_turn_end` |
 | `aiffel/actions/` | `PendingAction` et exécution validée |
 | `aiffel/vault/` | `SecretStore` (chiffrement d'enveloppe) |
@@ -70,7 +70,8 @@ le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le
 4. **Logs** : jamais de contenu utilisateur, de jeton, d'email ou de `chat_id` en clair (`aiffel/logging.py`).
 5. **Ekylibre** : ne jamais appeler `DELETE /api/v2/tokens`, car le `simple-token` est partagé avec
    zero-mobile et Duke (ADR-07).
-6. Les tests `tests/isolation/` et ceux de validation des écritures sont **bloquants**.
+6. Les tests `tests/isolation/` et ceux de validation des écritures sont **bloquants**, ainsi que
+   `tests/unit/test_lyvre_tools.py::test_no_lyvre_write_tool` (aucun outil d'écriture Lyvre).
 
 ## Base de données
 
@@ -134,6 +135,22 @@ le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le
 - Client : `aiffel/connectors/plantnet/client.py` (clé de la plateforme en paramètre `api-key`,
   jamais dans les erreurs ni les journaux). Savoir-faire `runtime/skills/diagnostiquer-photo` :
   nuance selon le score, cite Pl@ntNet, aucun traitement prescrit sur la seule photo.
+
+## Comptabilité (Lyvre, T4)
+
+- Raccordement par l'exploitant : `/lyvre` sur Telegram (`aiffel/channels/lyvre_menu.py`) envoie un
+  lien à usage unique vers la page `/lyvre` (`aiffel/app/lyvre_routes.py`), où il colle une clé
+  `lyv_…` créée dans Lyvre (Configuration, puis Accès API). Adresse en HTTPS sous
+  `AIFFEL_LYVRE_ALLOWED_DOMAINS` (`lyvre.org` ; défaut proposé `AIFFEL_LYVRE_DEFAULT_URL`).
+- `aiffel/lyvre.py` : une connexion par ferme (`connector='lyvre'`), clé chiffrée (`lyvre_api_key`),
+  `scopes` = domaines lus par la clé, `tenant` = nom de la structure. Clé refusée (401) pendant un
+  tour → `needs_reconnect` et message à l'exploitant.
+- Outils `lyvre_<nom>` (`aiffel/tools/lyvre.py`) : les outils de **lecture** de Lyvre, instantané
+  `aiffel/connectors/lyvre/tool_schemas.json` (régénéré par `scripts/sync_lyvre_tools.py`), proposés
+  aux **exploitants seulement** et filtrés par domaine (`ToolSpec.domain`). Le client refuse tout
+  autre nom avant le réseau : Aiffel n'écrit jamais dans Lyvre.
+- Savoir-faire `runtime/skills/consulter-compta` ; évaluation `python -m tests.eval.compta`
+  (10 questions, vrai modèle, faux Lyvre).
 
 ## Modèle d'IA par ferme
 

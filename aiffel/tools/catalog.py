@@ -1,4 +1,5 @@
-"""Outils de la phase 1 : lecture Ekylibre, référentiel Lexicon, calculs, savoir-faire.
+"""Outils de l'agent : lecture Ekylibre, comptabilité Lyvre, référentiel Lexicon, calculs,
+savoir-faire.
 
 Toutes les quantités et les sommes passent par des outils déterministes (NF-IAC) : le modèle
 choisit quoi calculer, le code calcule.
@@ -20,6 +21,7 @@ from aiffel.actions.mapping import DoseUnit, Draft, DraftInput, MappingError, sl
 from aiffel.connectors.ekylibre.client import EkylibreError, EkylibreUnauthorized
 from aiffel.connectors.lexicon.client import LexiconError
 from aiffel.connectors.plantnet.client import NO_RESULT, SOURCE, PlantNetError
+from aiffel.tools.lyvre import lyvre_tools
 from aiffel.tools.registry import ToolContext, ToolFailure, ToolOutput, ToolSpec
 
 EKYLIBRE = "Ekylibre"
@@ -442,6 +444,7 @@ def phase1_tools() -> list[ToolSpec]:
             requires="ekylibre",
         ),
         *lexicon_tools(),
+        *lyvre_tools(),
         *plantnet_tools(),
         ToolSpec(
             "calc_conversion",

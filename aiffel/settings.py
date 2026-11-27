@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Domaines Ekylibre acceptés pour le raccordement (sous-domaine = tenant de la ferme).
     ekylibre_allowed_domains: tuple[str, ...] = ("ekylibre-dev.com", "ekylibre.com")
     pairing_code_ttl_minutes: int = 15
+    # Lyvre (comptabilité, T4) : adresse proposée et domaines acceptés pour l'installation.
+    lyvre_default_url: str = "https://app.lyvre.org"
+    lyvre_allowed_domains: tuple[str, ...] = ("lyvre.org",)
 
     # Moteur d'agent (A4). Modèle et effort modifiables sans toucher au code (NF-SOB).
     # Fournisseur : « anthropic » (API directe) ou « openrouter » (Mistral, DeepSeek, Qwen…).

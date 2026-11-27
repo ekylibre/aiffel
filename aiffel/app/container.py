@@ -14,6 +14,7 @@ from aiffel.channels.base import OutboundMessage
 from aiffel.channels.dispatcher import Dispatcher
 from aiffel.channels.handlers import Handlers, placeholder_assistant
 from aiffel.channels.identity import IdentityService
+from aiffel.channels.lyvre_menu import LyvreMenu
 from aiffel.channels.telegram.api import TelegramClient
 from aiffel.connectors.lexicon.client import LexiconClient
 from aiffel.connectors.plantnet.client import PlantNetClient
@@ -31,6 +32,7 @@ from aiffel.extensions import (
 from aiffel.farm_context import FarmContextService
 from aiffel.farm_llm import FarmLLMService
 from aiffel.logging import configure_logging
+from aiffel.lyvre import LyvreService
 from aiffel.memory import MemoryService
 from aiffel.orchestrator.agent import Orchestrator
 from aiffel.orchestrator.llm import AnthropicProvider, Effort, LLMProvider
@@ -74,6 +76,7 @@ class Services:
     llm: FarmLLMService | None = None
     extensions: list[Extension] = field(default_factory=list)
     memory: MemoryService | None = None
+    lyvre: LyvreService | None = None
     _dispatcher: Dispatcher | None = field(default=None, init=False)
 
     def handlers(self) -> Handlers:
@@ -89,6 +92,9 @@ class Services:
             self.extensions,
             self.memory,
             RightsService(self.sessions),
+            LyvreMenu(self.pairing, self.lyvre, self.settings.public_base_url)
+            if self.lyvre is not None
+            else None,
         )
 
     def dispatcher(self) -> Dispatcher:
@@ -185,6 +191,7 @@ def build_services(settings: Settings | None = None) -> Services:
     http = httpx.AsyncClient(timeout=20.0, follow_redirects=False)
     farms = FarmContextService(sessions, keyring, http)
     lexicon = LexiconClient(settings.lexicon_mcp_url)
+    lyvre = LyvreService(sessions, keyring, http, settings.lyvre_allowed_domains)
     actions = ActionService(sessions)
     memory = MemoryService(sessions)
     telegram = TelegramClient(SecretValue(bot_token))
@@ -229,6 +236,7 @@ def build_services(settings: Settings | None = None) -> Services:
             if settings.plantnet_api_key
             else None
         ),
+        lyvre=lyvre,
         fetch_photo=telegram.download,
         photo_max_bytes=settings.photo_max_bytes,
     )
@@ -266,6 +274,7 @@ def build_services(settings: Settings | None = None) -> Services:
         llm=llm,
         extensions=extensions,
         memory=memory,
+        lyvre=lyvre,
     )
 
 

@@ -41,10 +41,13 @@ PAIRING_MAX_ATTEMPTS = 5
 # Objets des liens à usage unique envoyés sur Telegram.
 PURPOSE_PAIR = "pair"
 PURPOSE_LLM_KEY = "llm_key"
+PURPOSE_LYVRE = "lyvre"
 EXPIRED = {
     PURPOSE_PAIR: "Ce lien n'est plus valable. Envoyez /start à Aiffel sur Telegram "
     "pour en recevoir un nouveau.",
     PURPOSE_LLM_KEY: "Ce lien n'est plus valable. Envoyez /modele à Aiffel sur Telegram "
+    "pour en recevoir un nouveau.",
+    PURPOSE_LYVRE: "Ce lien n'est plus valable. Envoyez /lyvre à Aiffel sur Telegram "
     "pour en recevoir un nouveau.",
 }
 # Objet d'un lien créé par une extension : message générique quand il a expiré.

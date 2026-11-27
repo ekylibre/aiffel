@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Lyvre — Aiffel{% endblock %}
+{% block content %}
+<h1>Raccorder Lyvre</h1>
+<p>Aiffel lira la comptabilité de la ferme <strong>{{ farm_name }}</strong> pour répondre à l'exploitant : achats, ventes, banque, TVA, MSA, marges. <strong>Lecture seule</strong> : Aiffel n'écrit jamais dans Lyvre.</p>
+<p>Dans Lyvre : Configuration, puis <em>Accès API</em>, puis <em>Créer une clé</em>. Cochez la lecture des domaines utiles (au moins la Comptabilité), sans écriture. La clé « lyv_… » ne s'affiche qu'une fois : copiez-la ici. Aiffel la garde chiffrée et ne l'affiche plus jamais.</p>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/lyvre" autocomplete="off">
+  <input type="hidden" name="c" value="{{ code }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="url">Adresse de Lyvre</label>
+  <input id="url" name="url" value="{{ url }}" required inputmode="url" autocapitalize="none" spellcheck="false">
+  <label for="key">Clé d'API Lyvre</label>
+  <input id="key" name="key" type="password" required autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="lyv_…">
+  <small>La clé est vérifiée auprès de Lyvre avant d'être enregistrée.</small>
+  <button type="submit">Raccorder Lyvre</button>
+</form>
+{% endblock %}
