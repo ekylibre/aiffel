@@ -156,10 +156,14 @@ le déploiement : `python -m aiffel.channels.telegram.webhook set` enregistre le
 - `aiffel/extensions.py` : un paquet installé qui déclare l'entry point `aiffel.extensions` ajoute
   commandes Telegram, boutons (préfixe de `callback_data`), lignes d'aide et du menu `/modele`,
   routes web, outils (passés par la passerelle), règle de crédit (`CreditPolicy`), hooks de création
-  de ferme et de consommation. Ses tables viennent de ses migrations (`aiffel.migrations`), lancées
-  par `aiffel.db.deploy` après celles du cœur.
-- `extensions/` : un sous-dossier par extension, souvent un sous-module git **privé** ; l'image
-  Docker installe ce qui s'y trouve. Le cœur ne doit **jamais** importer une extension.
+  de ferme et de consommation. Ses tables éventuelles viennent de ses migrations
+  (`aiffel.migrations`), lancées par `aiffel.db.deploy` après celles du cœur.
+- Aiffel en ligne : `ekylibre-billing-client` (dépôt privé `ekylibre/ekylibre-billing`, dossier
+  `client/`) est installé dans l'image par l'argument de build `AIFFEL_EXTENSIONS` ; il parle au
+  service billing autonome par HTTP (`AIFFEL_BILLING_API_URL`, `AIFFEL_BILLING_API_KEY`) et n'a
+  aucune table dans la base d'Aiffel. Le cœur ne doit **jamais** importer une extension
+  (`tests/isolation/test_core_vs_billing.py`, bloquant).
+- `extensions/` : extensions locales (développement) ; l'image installe ce qui s'y trouve.
 - `aiffel.testing` : fixtures pytest (base migrée, rôle applicatif, `create_farm`) pour les tests
   du cœur et des extensions.
 

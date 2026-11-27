@@ -20,11 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        # Pas de ``submodules`` : ``ekylibre-billing`` est privé et son clone échoue avec le
-        # ``GITHUB_TOKEN`` par défaut. C'est ce qu'on veut : le dossier reste vide, le Dockerfile
-        # saute les extensions sans ``pyproject.toml`` et l'image publique n'embarque rien de la
-        # facturation (D-BYO, D-DEP). Les sous-modules publics actuels (aucun aujourd'hui) seraient
-        # à réactiver via un paramètre ``submodules: true`` filtré par URL le jour où il y en a.
+        # Image publique : ni ``AIFFEL_EXTENSIONS`` ni secret ``github_token``, donc aucune
+        # extension installée. Rien de la facturation n'y entre (D-BYO, D-DEP) : le client du
+        # billing n'est tiré que par l'image d'Aiffel en ligne (compose.dokploy.yml).
 
       - uses: docker/setup-buildx-action@v3
 
