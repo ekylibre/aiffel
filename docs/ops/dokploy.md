@@ -52,6 +52,33 @@ Variables facultatives (valeur par défaut dans `compose.dokploy.yml`) :
 `AIFFEL_LOG_LEVEL`, `AIFFEL_LLM_PROVIDER`, `AIFFEL_LLM_MODEL`, `AIFFEL_LLM_EFFORT`,
 `AIFFEL_EKYLIBRE_ALLOWED_DOMAINS`, `AIFFEL_STT_ENABLED`.
 
+### Aiffel en ligne : client du billing
+
+Le billing (abonnement, factures, quota de la clé de la plateforme) est un service à part, déployé
+depuis le dépôt privé `ekylibre/ekylibre-billing` dans son propre projet Dokploy (voir son
+`docs/exploitation.md`). L'image d'Aiffel n'embarque que son client, `ekylibre-billing-client`,
+tiré du dépôt au moment du build :
+
+| Variable | Description |
+|---|---|
+| `AIFFEL_EXTENSIONS` | `git+https://github.com/ekylibre/ekylibre-billing.git@main#subdirectory=client` (argument de build). |
+| `GITHUB_TOKEN` | Jeton GitHub en lecture seule sur `ekylibre/ekylibre-billing` (secret de build, jamais dans l'image). |
+| `AIFFEL_BILLING_API_URL` | `https://billing.ekylibre.com`. |
+| `AIFFEL_BILLING_API_KEY` | Clé partagée, identique à `BILLING_INTERNAL_API_KEY` côté billing. |
+
+Sans ces variables, Aiffel tourne sans billing : pas de `/abonnement`, crédit de la plateforme
+sans limite. Le billing joint les exploitants par `POST https://app.aiffel.org/billing/notify`
+(même clé).
+
+Commande de l'application compose (champ « Command », préfixé par `docker`) : depuis la sortie
+du billing, plus de second fichier compose ni de sous-modules :
+
+```
+compose -p <appName> --env-file docker/.env -f docker/compose.dokploy.yml up -d --build --remove-orphans
+```
+
+L'option `enableSubmodules` de l'application compose peut être désactivée.
+
 ### Domaine
 
 Onglet « Domains » : service `app`, port `8000`, host `app.aiffel.org`, HTTPS avec génération

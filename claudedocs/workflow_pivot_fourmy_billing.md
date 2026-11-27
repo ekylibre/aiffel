@@ -7,17 +7,17 @@
 > morceau indépendant, testable, revu avant fusion.
 > Étape suivante : `/sc:implement`, lot par lot, dans l'ordre donné ci-dessous.
 
-## État au 2026-11-20
+## État au 2026-11-27
 
 | Tranche | Statut | Détail |
 |---|---|---|
-| **T1** | ✅ Livré | `ekylibre/aiffel#34` (planning + test d'isolation + rename du sous-module) + `ekylibre/ekylibre-billing#7` (renommage paquet, squelette `api/internal.py`, client façade, fix horloge `outbox.enqueue`). T1-safe-4 (préfixer les tables `billing`) **reporté** jusqu'à la séparation DB. |
-| **T2** | ⏳ Bloqué | API Fourmy côté équipe Fourmy pas encore disponible. |
+| **T1** | ✅ Code livré (PR ouvertes le 2026-11-27) | `ekylibre/ekylibre-billing#9` : service autonome (base `billing`, tables `billing_*`, API `/internal` réelle, pages `/abonnement` par liens à usage unique, ordonnanceur en processus, Dockerfile + `compose.lavz.yml`), paquet `client/` (`ekylibre-billing-client`), reprise `import_legacy` + script de suppression. `ekylibre/aiffel` (cette PR) : sous-module retiré, client installé par `AIFFEL_EXTENSIONS` (git + secret de build). Reste à l'exploitant : projet Dokploy `ekylibre-billing`, DNS `billing.ekylibre.com`, bascule (`docs/exploitation.md` du billing). Écarts au plan : `docs/ARCHITECTURE.md` du billing. |
+| **T2** | ⏳ Bloqué | API et MCP Fourmy en cours de développement (2026-11-27). |
 | **T3** | ✅ Livré (hors T3-4) | `ekylibre/aiffel#36` (`compose.libre.yml`, `.env.libre.example`, `docs/ops/install-libre.md`, workflow `publish.yml`) + `ekylibre/aiffel#37` (fix workflow qui tentait de cloner le sous-module privé). Image `ghcr.io/ekylibre/aiffel:main` publiée. T3-4 (test E2E contre faux Fourmy) et T3-6 (section appairage Fourmy/Lyvre de la doc) restent à faire avec T2. |
-| **T4** | ⏳ Bloqué | API Lyvre côté équipe Lyvre pas encore disponible. |
+| **T4** | ⏳ À démarrer | API et MCP Lyvre disponibles (2026-11-27). |
 | **T5** | ⏳ À démarrer | Accès au dépôt `ekylibre-sas` requis. |
 
-Chantier hors tranche : **Q7** (mentions légales du vendeur : `plans.py:SELLER.share_capital` et `rcs_city` à renseigner avec les vraies valeurs Ekylibre SAS pour débloquer l'émission des factures).
+Chantier hors tranche : **Q7** ✅ (`ekylibre/ekylibre-billing#8`) : capital 29 081 €, RCS Saintes 808 534 283 ; les factures en attente seront émises au premier passage de l'ordonnanceur.
 
 ## 0. Objectif et critères de réussite
 

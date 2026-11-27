@@ -11,6 +11,10 @@
 #   - dokploy-network : réseau public géré par Dokploy (Traefik), rattaché seulement à l'app.
 #
 # Variables à définir dans Dokploy avant le premier déploiement : voir docs/ops/dokploy.md.
+#
+# Aiffel en ligne : l'image embarque le client du billing (``ekylibre-billing-client``, dépôt privé)
+# si ``AIFFEL_EXTENSIONS`` le désigne ; ``GITHUB_TOKEN`` (lecture du dépôt) est passé en secret de
+# build. Le service billing lui-même est un projet Dokploy à part (dépôt ekylibre-billing).
 
 name: aiffel
 
@@ -19,6 +23,10 @@ x-app-image: &app-image
   build:
     context: ..
     dockerfile: docker/Dockerfile
+    args:
+      AIFFEL_EXTENSIONS: ${AIFFEL_EXTENSIONS:-}
+    secrets:
+      - github_token
 
 x-app-env: &app-env
   AIFFEL_ENV: production
@@ -37,6 +45,9 @@ x-app-env: &app-env
   AIFFEL_LLM_MODEL: ${AIFFEL_LLM_MODEL:-claude-opus-5-5}
   AIFFEL_LLM_EFFORT: ${AIFFEL_LLM_EFFORT:-medium}
   AIFFEL_STT_ENABLED: ${AIFFEL_STT_ENABLED:-true}
+  # Client du billing (Aiffel en ligne) ; vides : Aiffel tourne sans billing.
+  AIFFEL_BILLING_API_URL: ${AIFFEL_BILLING_API_URL:-}
+  AIFFEL_BILLING_API_KEY: ${AIFFEL_BILLING_API_KEY:-}
 
 services:
   db:
@@ -110,6 +121,10 @@ services:
 
 volumes:
   aiffel-db-data:
+
+secrets:
+  github_token:
+    environment: GITHUB_TOKEN
 
 networks:
   aiffel-internal:
