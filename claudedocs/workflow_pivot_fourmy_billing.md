@@ -15,7 +15,7 @@
 | **T2** | ⏳ Bloqué | API et MCP Fourmy en cours de développement (2026-11-27). |
 | **T3** | ✅ Livré (hors T3-4) | `ekylibre/aiffel#36` (`compose.libre.yml`, `.env.libre.example`, `docs/ops/install-libre.md`, workflow `publish.yml`) + `ekylibre/aiffel#37` (fix workflow qui tentait de cloner le sous-module privé). Image `ghcr.io/ekylibre/aiffel:main` publiée. T3-4 (test E2E contre faux Fourmy) et T3-6 (section appairage Fourmy/Lyvre de la doc) restent à faire avec T2. |
 | **T4** | ✅ Code livré (PR ouverte le 2026-11-27) | Connecteur Lyvre en lecture seule : `/lyvre` + page de clé `lyv_…`, 21 outils `lyvre_*` (exploitant, filtrés par domaine), skill `consulter-compta`, test bloquant `test_no_lyvre_write_tool`, évaluation `tests.eval.compta` 10/10. Écarts : contrat réel de Lyvre (clé d'API + outils d'agent) au lieu des endpoints de l'ébauche §4.2 ; outils de Lyvre exposés tels quels au lieu de 4 outils maison ; une PR au lieu de trois. Reste : essai contre `lyvre.org` avec une vraie clé ; règles de rétention et d'affichage à valider avec l'équipe Lyvre. |
-| **T5** | ⏳ À démarrer | Accès au dépôt `ekylibre-sas` requis. |
+| **T5** | 🚧 En cours | `ekylibre/ekylibre-sas#1` : page `/aiffel` alignée sur le pivot (Lyvre en lecture, Fourmy en cours, AGPL) + section « Installer Aiffel soi-même » (T5-5). Les pages `/lyvre` et `/fourmy` existaient déjà (lots L1–L8). Restent : `GET /pricing`, comparatif et boutons d'abonnement (après déploiement de billing et grille tarifaire), CGV de vente, provisioning Lyvre/Fourmy (après T2). |
 
 Chantier hors tranche : **Q7** ✅ (`ekylibre/ekylibre-billing#8`) : capital 29 081 €, RCS Saintes 808 534 283 ; les factures en attente seront émises au premier passage de l'ordonnanceur.
 
@@ -428,8 +428,10 @@ parcours de souscription pointant vers `ekylibre-billing`.
 - Mail de bienvenue multi-produit.
 
 **T5-5 — Page « Installer Aiffel soi-même » (0,25 j)**
-- Lien dépôt public, bandeau D-REL, précise que Lyvre et Fourmy ne sont
-  pas open-source (positionnement commercial).
+- Lien dépôt public, bandeau D-REL. Aiffel, Lyvre et Fourmy sont tous
+  trois libres (AGPL), décision confirmée le 2026-11-27 : l'offre commerciale
+  vend l'hébergement, le support et l'exploitation, pas le code.
+- Réalisé comme une section `/aiffel/#installer` (pas de page à part).
 
 **T5-6 — Mentions légales, CGV, RGPD mutualisées (0,5 j)**
 - Mise à jour pour trois produits.
